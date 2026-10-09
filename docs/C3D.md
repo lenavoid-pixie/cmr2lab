@@ -475,8 +475,8 @@ understood why.**
  f   min       med       max     neg%   shape
  0  -1.0000   0.0000    0.9997   39.6%   signed ±1
  1  -1.0000   0.0000    1.0000   39.1%   signed ±1
- 2   0.0000   0.0000    0.0000    0.0%   SENTINEL in 1204/1304
- 3   0.0000   0.0000    0.0000    0.0%   SENTINEL in 1204/1304
+ 2   -- see below --                        SENTINEL in  345/1304  (26.5%)
+ 3   -- see below --                        SENTINEL in 1204/1304  (92.3%)
  4   0.0000   0.5938    0.9998    0.0%   unsigned 0..1
  5   0.0000   0.5939    0.9999    0.0%   unsigned 0..1
  6   0.0000   0.5938    0.9998    0.0%   ★ identical to f4
@@ -506,3 +506,63 @@ guess.**
 
 **NEXT: correlate c14 records against c20 (888 nodes) and c18 (15 records).
 If c14 is 1304 and c20 is 888, the ratio 1304/888 = 1.468 has to mean something.**
+
+
+---
+
+## ★ CORRECTION to the field table above
+
+**The sentinel census was misread when this was first written.** Exact counts:
+
+```
+f 0: sentinel    0/1304
+f 1: sentinel    0/1304
+f 2: sentinel  345/1304   real 959     (26.5% null)
+f 3: sentinel 1204/1304   real 100     (92.3% null)
+f 4 .. f 11: sentinel 0/1304
+```
+
+**Only f2 and f3 ever hold a null. f3 is null 92% of the time — it is a
+mostly-empty field, not a data column.**
+
+**And f2 is *not* mostly-null: 959 of 1304 records carry a real value, which the
+earlier shape table discarded because the field values are large.**
+
+### What f2 actually contains
+
+```
+ff 64 9a 9a
+ff 52 ac ac
+ff 48 b5 b5
+ff 69 69 95
+ff 49 4a b3
+ff 57 57 a7
+ff 51 51 ac
+ff 44 44 b7
+```
+
+**Every sampled value has `ff` as its leading byte.** That is not a payload byte
+— it is the sentinel's high byte bleeding across my field boundary. **The record
+offset is wrong by one byte for at least this column**, which also explains the
+equal byte-pairs (`9a9a`, `acac`, `b5b5`, `5757`, `5151`, `4444`) seen here and
+four rounds ago in the "int8 stream".
+
+### Also found
+
+`(f0, f1, f11)` has **median length exactly 1.0000**, p25 0.973, p75 1.021.
+Three fields forming a unit vector. **They are not contiguous, so the field
+order is not the storage order** — which is consistent with the one-byte offset
+problem above.
+
+`(f0, f1)` traces with a mean angle step of 0.912 rad (52.3°) — consistent with
+something sampled about 7 times per revolution, not a dense circle.
+
+### Method failure to record
+
+**Third filter error of the session, same shape each time:** a threshold is set,
+it silently removes a subset of the data, and the remainder is then read as the
+whole truth. Specifically here: a `|v| < 100` "sane" filter deleted every real
+value in f2, and the resulting `0.0000 .. 0.0000` range was reported as fact.
+
+**Report `n_discarded` next to every filtered statistic.** A column that is
+mostly *excluded* tells you nothing about that column.
