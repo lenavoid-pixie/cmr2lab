@@ -430,3 +430,79 @@ line.** Neither is a car. Something about the grouping is still wrong.
 
 **NEXT: autocorrelation/FFT on the float buffer to find the TRUE period before
 guessing another stride.**
+
+---
+
+## ★ c14 SOLVED to the record level: 12 floats / 48 bytes
+
+Two independent methods agree, and the arithmetic closes exactly.
+
+### The period
+
+Autocorrelation on the RAW float sequence (sentinels zeroed, **nothing filtered
+out** — the earlier "period 10" was an artifact of dropping elements):
+
+```
+lag 12 ( 48B)  +0.863  ★
+lag 24 ( 96B)  +0.771
+lag 36 (144B)  +0.695
+lag 48 (192B)  +0.636
+lag 60 (240B)  +0.587
+everything else  < 0.13
+```
+
+Sentinel spacing, measured independently:
+
+```
+gap 12  -> 859 times   ★
+```
+
+### The arithmetic
+
+```
+c14 block        77,508 ..  140,116     62,608 B
+1304 records x 48 B          =  62,592
+starts at 77,524  +  62,592  =  140,116   ★ EXACT
+```
+
+The block is 16 bytes longer than 1304x48, so the data begins 16 bytes in.
+**The earlier coherence sweep had already peaked at offset 77,524 before I
+understood why.**
+
+### The 12 fields
+
+```
+ f   min       med       max     neg%   shape
+ 0  -1.0000   0.0000    0.9997   39.6%   signed ±1
+ 1  -1.0000   0.0000    1.0000   39.1%   signed ±1
+ 2   0.0000   0.0000    0.0000    0.0%   SENTINEL in 1204/1304
+ 3   0.0000   0.0000    0.0000    0.0%   SENTINEL in 1204/1304
+ 4   0.0000   0.5938    0.9998    0.0%   unsigned 0..1
+ 5   0.0000   0.5939    0.9999    0.0%   unsigned 0..1
+ 6   0.0000   0.5938    0.9998    0.0%   ★ identical to f4
+ 7   0.0000   0.5939    0.9999    0.0%   ★ identical to f5
+ 8  -1.9085   0.0000    1.9085   49.8%   broad
+ 9  -0.5566   0.0000    0.7229   40.1%   signed ±1
+10  -0.8791   0.0174    0.8791   41.9%   signed ±1
+11  -1.0000   0.0000    1.0000   44.6%   signed ±1
+```
+
+**f4 == f6 and f5 == f7 EXACTLY, in all 1304 records.** Two floats stored twice.
+
+### What this rules OUT
+
+**Not a plain vertex buffer.** A vertex does not store the same two values
+twice, and it does not hold fields constant across records (`f10` is
+-0.13779 in consecutive records; `f1` sits near -0.5816 for long stretches).
+
+**Not 24-byte vertex pairs either** — the coherence peak at 24 was real but the
+48-byte periodicity is stronger and the field structure only resolves at 48.
+
+### What it probably IS
+
+Some per-record descriptor with an embedded duplicate pair — a transform,
+a bounding/plane entry, or an animation/key entry. **Not yet named. Do not
+guess.**
+
+**NEXT: correlate c14 records against c20 (888 nodes) and c18 (15 records).
+If c14 is 1304 and c20 is 888, the ratio 1304/888 = 1.468 has to mean something.**
