@@ -795,3 +795,60 @@ layout is, the semantic groups are not stored in simple runs.
 
 `/root/cmr2_pairs.svg`, `/root/cmr2_pairs.png` — 11 field pairs, 1204 records.
 Only `f0/f1` has been read in detail. **The other ten panels are unanalysed.**
+
+---
+
+## THEATER MODE — feasibility, and what the data gives us
+
+Miami asked whether a replay-mode toggle (pause / step / slowmo / freecam) is
+possible. **Yes — and a native port makes it EASIER than the original could,
+for one structural reason.**
+
+### Why it is easy: in a replay, nothing is simulating
+
+A freecam during live gameplay is dangerous: the camera matrix is read by AI,
+collision and HUD code, so overriding it breaks the sim. **In a REPLAY the
+simulation is already over** — CMR2 has recorded the run. Nothing is advancing,
+nothing is checking the camera. So pausing, stepping, scrubbing and flying a
+free camera are all operations on a frozen stream.
+
+That is the whole architectural argument, and it puts the theater in the right
+place instead of bolted onto gameplay where it would fight the physics.
+
+### Cost per control
+
+```
+pause            free       stop advancing the tick
+step frame       free       advance the tick once
+slow / fast      free       scale dt
+scrub timeline   cheap      index into a stored stream - NO determinism needed
+freecam          medium     set the camera matrix directly
+rewind (live)    OUT        needs determinism or snapshots - not attempted
+```
+
+**Rewind is the one that is genuinely hard, and it is only hard for the LIVE
+sim. Scrubbing a recorded replay is just arithmetic.**
+
+### What the data actually gives us  ★ NEW
+
+```
+.rpl files are GZIP-wrapped CMPR containers
+   champend.rpl   231 bytes on disk -> 25,374 decompressed
+   magic after gunzip: "CMPR"
+
+Stage containers are ALSO gzip-wrapped:
+   Swe01Lo.bfl   1,923,469 -> 11,254,304
+
+★ THE STAGE CONTAINER HAS NAMED SHAPE ENTRIES:
+   c3dShp0 .. c3dShp56   (57+ of them)
+```
+
+**The stage geometry is indexed by name, the same pattern as the car's
+260-byte texture path table. That is the track mesh, addressable.**
+
+### Caveat, stated plainly
+
+**The existing `.bfl` parser produces garbage entry names for STAGE files** —
+it works on car containers (581/581 byte-identical) but the stage layout differs.
+The `c3dShp` names above were read out of raw bytes, not from the parser.
+**Stage containers need their own reader before the road can be extracted.**
