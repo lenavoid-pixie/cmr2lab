@@ -290,3 +290,69 @@ nothing.** Add one before trusting any pattern found this way.
 after load — find the function that consumes the `c14`/`c10` base pointers and
 read the *stride it walks with* and the *conversion it applies*. The bytes will
 not tell you the encoding. The instructions that decode them will.
+
+---
+
+## ★ A REAL packed int8 stream — found, controlled, not yet named
+
+**Correcting the section above.** The "methods that failed" entry for the packed
+stream was wrong, and the control is what proved it:
+
+```
+longest int8 run, real 205a1N.c3d :  1149
+longest int8 run, SHUFFLED bytes  :    23
+```
+
+**50:1. It is not noise.** The sliding-window pattern I dismissed was a window
+sliding over something that genuinely exists.
+
+### The stream
+
+```
+offset   136,674  ..  140,121      3,447 bytes
+1,149 triples of signed int8 (x, y, z)
+x: min -128   median 0   max 123
+y: min -128   median 0   max 123
+z: min -128   median 0   max 123
+```
+
+**Sharp edges on both sides — the run length falls to 0 one byte earlier and
+drops off one byte later. Real field boundaries, not a gradient.**
+
+Sandwiched between two arrays of `u32 = 1`:
+
+```
+before:  01 00 00 00  01 00 00 00  01 00 00 00 ...
+after:   00 00 00 01  00 00 00 01  00 00 00 01 ...
+```
+
+### The structure inside it
+
+**Every triple has its non-zero components equal to each other:**
+
+```
+  1   0 100
+100   0   0
+ 82  82   0
+  0  72  72
+  0   0 105
+105   0   0
+ 73  73   0
+  0  87  87
+```
+
+**And the axes cycle in a fixed order:**
+
+```
+Z  ->  X  ->  XY  ->  YZ  ->  Z  ->  X  ->  XY  ->  YZ  ...
+```
+
+This is a structured stream of direction vectors. **What is not established is
+what they are** — the magnitudes run 68–116, not a clean 127, so they are *not*
+simply unit normals scaled by 127.
+
+### Standing method rule from this
+
+**Run-length scans over binary data require a shuffled negative control.** This
+one was run late, after the finding had already been written off — and it
+reversed the call. **Run the control first, not as a post-mortem.**
