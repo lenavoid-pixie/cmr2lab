@@ -112,3 +112,67 @@ carry extra trailing data beyond the tables above (372,960 and 33,440 bytes
 unaccounted). The base layout is correct for them; there is an additional
 trailer to map. The **road** (`temp.c3d`) closes exactly, which is the one
 that matters for a stage.
+
+---
+
+## Record semantics — status
+
+The container, header and array layout are **solved and proven** (259/259 + a real
+stage road). The *contents* of the records are partially decoded.
+
+### What the records contain
+
+`c20` (76 bytes) records hold **ten u32 pointers each**. The loader walks them and
+adds a heap base at `[0x65fa20]` to every entry that isn't `0xFFFFFFFF`:
+
+```
+mov  edx, [ecx]
+cmp  edx, -1
+je   skip
+add  edx, [0x65fa20]
+mov  [ecx], edx
+skip:
+add  ecx, 4        ; ten per record
+add  ecx, 0x4c     ; then stride 76
+```
+
+`c10` (20 bytes) records carry a **sequential index and a back reference**:
+
+```
+(3,1) (4,2) (5,3) (6,4) ...      u16[1] = u16[0] - 2
+```
+
+### The vertex data is quantized, not plain float
+
+Scanning every byte offset in `205a1N.c3d` for runs of sane float32 returns
+**zero** runs of 40 or more. The floats that *are* present are exact binary
+fractions:
+
+```
+0.6015625        = 77/128
+0.6405792236328125
+0.648468017578125
+0.113922119140625
+```
+
+Values like these come from **small integers scaled by a power of two** — the
+classic signature of compressed vertex data. The mesh is in there. What is not
+yet established is the **encoding and the field order**.
+
+Recurring sentinels inside records:
+
+```
+0xFFFFFFFF            the null pointer the loader skips
+-1.7014118346046923e+38    appears 93 times in c14 — a marker
+denormals            27 times
+```
+
+### What that means for a port
+
+Loading geometry is **not** blocked on anything structural any more — the file
+parses, the arrays are located, the counts and strides are known, the trailer is
+known. What remains is **decoding one record type**.
+
+That is a bounded, findable problem, and the next step is to disassemble the
+consumers of the `c14` and `c10` arrays — the functions that read them after
+load — rather than staring at the bytes.
