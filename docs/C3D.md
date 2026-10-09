@@ -718,3 +718,54 @@ structure. It was this array, read at the wrong width.**
 
 What the byte values *mean*, and why the data is stored both inside the float
 records (f2) and again as a parallel array. **Not guessed.**
+
+---
+
+## ★★ BOTH ARRAYS BREAK AT INDEX 344
+
+The tail array and the f2 field of the float records share one boundary:
+
+```
+tail array:        344 zeros,  then 860 non-zero bytes
+f2 in the records: f2 == null for   344 records, then real for 860
+                   (single zero-run, verified — not scattered)
+```
+
+**Two separate arrays, identical break point, identical counts. That is a
+structural fact of the file, not an inference.**
+
+### The tail byte stream is a SIGNAL — and the normal hypothesis is dead
+
+Adjacent-byte differences:
+
+```
+real:      |delta| median  2    mean 13.6
+shuffled:  |delta| median 68    mean 74.7        →  5.49x
+```
+
+**5.5× smoother than random. This is a correlated, ordered stream.**
+
+**Tested as packed int8 normals (values biased by 128, three bytes per vector)
+and it FAILS — and the failure is clean:**
+
+```
+real bytes:      median triple length 0.6621    within 5% of 1.0:  2.5%
+SHUFFLED bytes:  median triple length 1.0583    within 5% of 1.0: 11.7%
+```
+
+**The shuffled control scores *higher* than the real sequence.** Random bytes
+make better unit vectors than these. That decisively rules out normals, and it
+is only visible because the control was run in the same breath as the test.
+
+### Where f2 fits
+
+f2's leading `ff`, which I spent two rounds trying to explain as an offset
+error, is simply this: **f2 is not a float.** It carries the same byte stream as
+the tail array, four indices apart.
+
+### Open
+
+What the byte values encode. Distribution is centred on 0x80 with 227 distinct
+values and strong local correlation — consistent with a quantised smooth
+quantity (angle, curvature, or a normal rotated into a record-local frame).
+**Not guessed.**
