@@ -566,3 +566,36 @@ value in f2, and the resulting `0.0000 .. 0.0000` range was reported as fact.
 
 **Report `n_discarded` next to every filtered statistic.** A column that is
 mostly *excluded* tells you nothing about that column.
+
+---
+
+## The offset theory was WRONG — tested and rejected
+
+I hypothesised the `ff` leading byte in f2 meant my record offset was one byte
+out. **Tested, and it is not.**
+
+```
+clean FFFFFFFF sentinels by 4-byte phase:
+   phase 0:  345      phase 1:  0      phase 2:  0      phase 3:  0
+
+record-start shift -3..+3, count of records whose f2 high byte is 0xff:
+   shift +0:  1204    ← the true alignment
+   shift +1:     0
+   shift +2:     0
+   shift +3:     0
+   shift -1:   346
+   shift -2:   348
+   shift -3:   346
+```
+
+**Shift +0 is correct: 345 clean sentinels and the f2-`ff` signature is maximal
+there. Shifting by one byte destroys both.**
+
+So the `ff` is **real data**, not a boundary artifact. Reading the whole record
+at +1 gives nonsense across every column (all twelve collapse to
+`med 0.0000`, `max 32.0003`), which is what a misalignment *looks* like —
+**further proof that +0 is the right one.**
+
+**What `ff` as a leading byte in f2 means is still unknown.** A float with a
+leading `0xff` is a large negative number; a `u32` in that range sits above
+`0xff000000`. Neither has been ruled in or out. **Not guessing.**
