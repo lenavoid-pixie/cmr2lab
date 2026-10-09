@@ -655,3 +655,66 @@ across all three.
 
 What the three segments *mean*, and what f2's leading `ff` byte encodes.
 **Not guessed.**
+
+---
+
+## ★★★ THE c14 BLOCK IS TWO PARALLEL ARRAYS — verified 23/23
+
+The "52 versus 48" discrepancy is solved, and it was never a stride error.
+
+```
+c14 block = n52 x 52 bytes, structured as:
+
+   n52 x 48 bytes     FLOAT DATA       (n52 units of 12 floats)
+   n52 x  4 bytes     PARALLEL ARRAY   (n52 u32 values)
+```
+
+**Both are exact multiples of n52. No padding, no slack, no 16 stray bytes.**
+
+Cross-model check, all 23 `*N.c3d` models:
+
+```
+205a1N n52=1204   tail starts at c14b + n52*48   ✓
+206a1N n52=1147   ✓      6r4a1N n52=1360  ✓     cora1N n52=1088  ✓
+esca1N n52=1132   ✓      suba1N n52=1116  ✓     ... 23/23
+```
+
+### The tail array
+
+1204 u32, only 107 distinct values. Top of the histogram:
+
+```
+0x00010000  x340      0x00008080  x207      0x00005757  x29
+0x00004444  x23       0x00004242  x23      0x0000a5a5  x21
+```
+
+**Read as u16, every value is a byte pair: `0x0000BBBB`.** The byte is duplicated
+into both halves. As u16 the whole array is `0x0000 × 1203` and `0x0001 × 343` —
+it is a **byte stream expanded into 32-bit slots.**
+
+### ★ And it holds the same data as f2
+
+```
+tail[340] = 0x00006464        f2[344] carries byte 0x64
+tail[341] = 0x00005252        f2[345] carries byte 0x52
+tail[342] = 0x00004848        f2[346] carries byte 0x48
+tail[343] = 0x00006969        f2[347] carries byte 0x69
+
+active range  tail: 340 .. 1203
+active range  f2:   344 .. 1203
+```
+
+**Same byte sequence, stored twice, 4 indices apart.** That is why f2's leading
+byte never made sense as a float: **f2 is not a float either.**
+
+### What this retroactively explains
+
+The "int8 stream" found at offset 136,674 earlier in this work — the equal
+byte-pairs `9a9a`, `acac`, `b5b5`, `5757`, `5151` that I could not name and
+twice wrote off — **is this same byte-expansion. It was never a separate
+structure. It was this array, read at the wrong width.**
+
+### Still open
+
+What the byte values *mean*, and why the data is stored both inside the float
+records (f2) and again as a parallel array. **Not guessed.**
