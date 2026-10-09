@@ -1,0 +1,228 @@
+#!/usr/bin/env python3
+"""
+cmr2lab — one file. Colin McRae Rally 2.0 content laboratory.
+
+    cmr2lab status                what is here, what is possible
+    cmr2lab list [cars|tracks]    enumerate content
+    cmr2lab unpack  <in.bfl> <dir>
+    cmr2lab pack    <dir> <out.bfl>
+    cmr2lab info    <in.bfl>      entries + magic breakdown
+    cmr2lab repack  <dir>         unpack -> rebuild -> VERIFY byte-identical, per file
+    cmr2lab install               write a Steam non-Steam-game launcher
+    cmr2lab tabs                  show the CMR2 / CMR3 content tabs
+
+No dependencies. Python 3 stdlib only.
+"""
+import sys, os, gzip, struct, json, hashlib, shutil, subprocess, textwrap
+
+VERSION = "0.1.0"
+MAGIC   = b'CMPR'
+PPF     = b'PP_F'
+TABS    = {"cmr2": "Colin McRae Rally 2.0 — original content",
+           "cmr3": "Colin McRae Rally 3 — imported content (separate tab)"}
+
+# ---------------------------------------------------------------- container ---
+def load(p):
+    raw = open(p,'rb').read()
+    return gzip.decompress(raw) if raw[:2]==b'\x1f\x8b' else raw
+
+def parse(blob):
+    if blob[:4]!=MAGIC: raise ValueError("not a CMPR container")
+    csize   = struct.unpack('<I', blob[4:8])[0]
+    toc_ptr = struct.unpack('<I', blob[csize+4:csize+8])[0]
+    pos, out = toc_ptr+8, []
+    while pos < len(blob)-4:
+        size, off, slen = struct.unpack('<III', blob[pos:pos+12]); pos += 12
+        name = blob[pos:pos+slen].rstrip(b'\0').decode('ascii','replace')
+        pos += slen + ((4 - slen%4) % 4)
+        out.append((name, off, size))
+    return out
+
+def extract(blob):
+    return [(n, blob[o+8:o+8+s]) for (n,o,s) in parse(blob)]
+
+def build(entries):
+    """entries [(name,bytes)] -> raw container. 4-byte aligned throughout."""
+    data, toc = bytearray(), bytearray()
+    for name, content in entries:
+        while len(data) % 4: data.append(0)          # align each entry
+        off = len(data); data += content
+        nb = name.encode('ascii')
+        toc += struct.pack('<III', len(content), off, len(nb)); toc += nb
+        toc += b'\0' * ((4 - len(nb)%4) % 4)
+    while len(data) % 4: data.append(0)              # align the TOC start
+    D = len(data); L = 8 + D + len(toc) + 4
+    out = bytearray(MAGIC + struct.pack('<I', L-8)); out += data; out += toc
+    out += struct.pack('<I', D)
+    assert len(out)==L
+    return bytes(out)
+
+def save(p, entries, compress=True):
+    raw = build(entries)
+    with open(p,'wb') as f:
+        f.write(gzip.compress(raw,9) if compress else raw)
+    return len(raw)
+
+def kind(name, data):
+    if data[:4]==PPF:  return 'geometry'
+    if data[:4]==b'DDS ': return 'texture'
+    if data[:3]==b'DDS': return 'texture'
+    if name.lower().endswith('.tga'): return 'texture'
+    if name.lower().endswith('.dds'): return 'texture'
+    return 'data'
+
+# ----------------------------------------------------------------- commands ---
+def find_game(start=None):
+    """-> the directory that contains Cars/ and Tracks/"""
+    cands = [start, os.getcwd(), '/root/.lena_cmr2/game',
+             os.path.expanduser('~/.steam/steam/steamapps/common/Colin McRae Rally 2.0'),
+             os.path.expanduser('~/.local/share/Steam/steamapps/common/Colin McRae Rally 2.0')]
+    for base in cands:
+        if not base or not os.path.isdir(base): continue
+        if os.path.isdir(os.path.join(base,'Cars')) and os.path.isdir(os.path.join(base,'Tracks')):
+            return base
+        for root, dirs, files in os.walk(base):
+            if 'Cars' in dirs and 'Tracks' in dirs: return root
+            if root.count(os.sep) - base.count(os.sep) > 3: dirs[:] = []
+    return None
+
+def cmd_status(a):
+    g = find_game(a[0] if a else None)
+    print(f"cmr2lab {VERSION}")
+    if not g:
+        print("  game: NOT FOUND — pass a path:  cmr2lab status /path/to/Colin McRae Rally 2.0")
+        return 1
+    cars   = [f for f in os.listdir(os.path.join(g,'Cars'))   if f.lower().endswith('.bfl')] if os.path.isdir(os.path.join(g,'Cars')) else []
+    tracks = []
+    if os.path.isdir(os.path.join(g,'Tracks')):
+        for r,d,fs in os.walk(os.path.join(g,'Tracks')):
+            tracks += [f for f in fs if f.lower().endswith('.bfl')]
+    print(f"  game:   {g}")
+    print(f"  cars:   {len(cars)} containers")
+    print(f"  tracks: {len(tracks)} containers")
+    print(f"  tabs:   {', '.join(TABS)}")
+    print(f"  cmr3:   {'installed' if os.path.exists(os.path.join(g,'cmr3')) else 'not imported'}")
+    print(f"  engine: {'native port present' if os.path.exists(os.path.join(g,'cmr2-native')) else 'original executable'}")
+    return 0
+
+def cmd_info(a):
+    for p in a:
+        blob = load(p); ents = parse(blob)
+        c = {}
+        for n,o,s in ents:
+            k = kind(n, blob[o+8:o+8+4]); c[k]=c.get(k,0)+1
+        print(f"\n{os.path.basename(p)}  {len(blob):,} B  {len(ents)} entries  {c}")
+        for n,o,s in ents[:8]:
+            d = blob[o+8:o+8+4]
+            print(f"   {s:>10,}  {d.hex()}  {kind(n,d):8s} {n}")
+        if len(ents)>8: print(f"   ... +{len(ents)-8}")
+    return 0
+
+def cmd_unpack(a):
+    if len(a)<2: print("usage: cmr2lab unpack <in.bfl> <dir>"); return 2
+    src, dst = a[0], a[1]
+    os.makedirs(dst, exist_ok=True)
+    ents = extract(load(src)); n=0
+    for name, data in ents:
+        op = os.path.join(dst, name)
+        os.makedirs(os.path.dirname(op) or dst, exist_ok=True)
+        open(op,'wb').write(data); n+=1
+    print(f"unpacked {n} entries -> {dst}")
+    return 0
+
+def cmd_pack(a):
+    if len(a)<2: print("usage: cmr2lab pack <dir> <out.bfl>"); return 2
+    src, dst = a[0], a[1]
+    ents=[]
+    for root, dirs, files in os.walk(src):
+        for f in sorted(files):
+            p = os.path.join(root,f)
+            ents.append((os.path.relpath(p, src), open(p,'rb').read()))
+    size = save(dst, ents)
+    print(f"packed {len(ents)} entries -> {dst}  ({size:,} B raw)")
+    return 0
+
+def cmd_repack(a):
+    """unpack -> rebuild -> prove byte-identical, one file or a whole tree"""
+    targets=[]
+    for x in (a or []):
+        if os.path.isdir(x):
+            for root,dirs,files in os.walk(x):
+                targets += [os.path.join(root,f) for f in files if f.lower().endswith('.bfl')]
+        else: targets.append(x)
+    if not targets: print("usage: cmr2lab repack <file.bfl|dir>"); return 2
+    ok=0; bad=[]; skip=[]
+    for p in sorted(targets):
+        try:
+            blob=load(p)
+            if blob[:4]!=MAGIC: skip.append(p); continue
+            if build(extract(blob))==blob: ok+=1
+            else: bad.append(p)
+        except Exception as e: bad.append(f"{p}: {e}")
+    tested = ok+len(bad)
+    print(f"repack VERIFY: {ok}/{tested} byte-identical"
+          + (f"   (skipped {len(skip)} non-container)" if skip else ""))
+    for b in bad[:10]: print("  ✗", b)
+    return 0 if not bad else 1
+
+def cmd_list(a):
+    g = find_game()
+    if not g: print("game not found"); return 1
+    what = a[0] if a else 'all'
+    for sub in (['Cars','Tracks'] if what=='all' else [what.capitalize()]):
+        d = os.path.join(g, sub)
+        if not os.path.isdir(d): continue
+        fs = sorted(f for f in os.listdir(d) if f.lower().endswith('.bfl'))
+        print(f"\n{sub}  ({len(fs)})")
+        for f in fs[:40]: print("   ", f)
+        if len(fs)>40: print(f"    ... +{len(fs)-40}")
+    return 0
+
+def cmd_tabs(a):
+    print("CONTENT TABS\n")
+    for k,v in TABS.items():
+        mark = '●' if k=='cmr2' else '○'
+        print(f"  {mark} {k:5s} {v}")
+    print("\n  CMR2 tab: live today — unpack/repack/upscale on the original game.")
+    print("  CMR3 tab: opens once the PP_F geometry record layout is parsed.")
+    return 0
+
+def cmd_install(a):
+    """write a Steam 'non-Steam game' launcher"""
+    g = find_game(a[0] if a else None)
+    if not g: print("game not found"); return 1
+    exe = None
+    for f in os.listdir(g):
+        if f.lower() in ('cmr2.exe','cmr2'): exe=os.path.join(g,f)
+    launcher = os.path.join(os.path.expanduser('~'), '.local/share/applications/cmr2lab.desktop')
+    os.makedirs(os.path.dirname(launcher), exist_ok=True)
+    body = textwrap.dedent(f"""\
+        [Desktop Entry]
+        Type=Application
+        Name=Colin McRae Rally 2.0 (cmr2lab)
+        Comment=Native port / content lab
+        Exec={exe or g}
+        Path={g}
+        Icon=applications-games
+        Categories=Game;
+        Terminal=false
+        """)
+    open(launcher,'w').write(body); os.chmod(launcher, 0o755)
+    print(f"wrote {launcher}")
+    print(f"  Exec={exe or g}")
+    print("\nSteam: Games > Add a Non-Steam Game > Browse > pick 'Colin McRae Rally 2.0 (cmr2lab)'")
+    return 0
+
+CMDS = {'status':cmd_status,'info':cmd_info,'unpack':cmd_unpack,'pack':cmd_pack,
+        'repack':cmd_repack,'list':cmd_list,'tabs':cmd_tabs,'install':cmd_install}
+
+def main():
+    if len(sys.argv)<2 or sys.argv[1] in ('-h','--help','help'):
+        print(__doc__); return 0
+    if sys.argv[1] in ('-V','--version'): print(VERSION); return 0
+    c = CMDS.get(sys.argv[1])
+    if not c: print(f"unknown command: {sys.argv[1]}\n"); print(__doc__); return 2
+    return c(sys.argv[2:])
+
+if __name__=='__main__':
+    sys.exit(main())
