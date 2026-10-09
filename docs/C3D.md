@@ -356,3 +356,77 @@ simply unit normals scaled by 127.
 **Run-length scans over binary data require a shuffled negative control.** This
 one was run late, after the finding had already been written off — and it
 reversed the call. **Run the control first, not as a post-mortem.**
+
+---
+
+## ★ c14 IS A FLOAT ARRAY — and the 52-byte stride is WRONG
+
+Three findings, all controlled.
+
+### 1. The .c3d files are GZIP on disk
+
+```
+first 32 bytes:  1f 8b 08 00 00 00 00 00 ...
+                 ^^^^ gzip magic
+```
+
+`205a1N.c3d` is **27,084 bytes on disk, 165,636 decompressed.** The loader at
+`c3d.py` already knew this — `gzip.decompress(raw) if raw[:2]==b'\x1f\x8b'`.
+
+**Consequence, and it cost a whole round:** scanning the *raw* file for byte-run
+structure found enormous fake runs in every file, because compressed data is
+high-entropy by definition. **Any structural scan must call `load()`, not
+`open().read()`.**
+
+### 2. c14 holds floats
+
+High-byte histogram of the c14 block — this is a float exponent distribution
+and nothing else produces it:
+
+```
+0x3f  x4772    1.0
+0x3e  x2407    0.5
+0xbf  x1566   -1.0
+0xbe  x1300   -0.5
+0x3d  x785     0.25
+0xbd  x291    -0.25
+0x3c  x264     0.125
+```
+
+12,895 of 15,652 values are finite and in ±10; 96.3% inside [-1, 1];
+range ±1.9085.
+
+### 3. The 52-byte stride is an assumption that fails
+
+Sliced at 52 bytes, all thirteen columns come back **statistically identical**:
+
+```
+fld 0   min -1.9061  med 0.1922  max 1.9085  26.1% neg
+fld 1   min -1.9061  med 0.1872  max 1.9085  25.1% neg
+...
+fld 12  min -1.9085  med 0.1808  max 1.9085  24.5% neg
+```
+
+Identical columns mean the stride is **not** a record boundary — it is slicing
+one flat buffer uniformly, so every column samples the same distribution.
+**c14 is 62,608 bytes = 15,652 consecutive floats, one type.**
+
+### 4. Spatial coherence points at a 24-byte stride
+
+Mean distance between consecutive 3-float groups vs the same groups shuffled:
+
+```
+stride  6 floats (24 B):  consec 0.3658   shuffled 1.4169   ratio 3.87x
+stride 12 floats (48 B):  consec 0.3939   shuffled 1.4816   ratio 3.76x
+stride  3 floats (12 B):  consec 1.2292   shuffled 1.2775   ratio 1.04x
+stride 13 floats (52 B):  consec 1.1367   shuffled 1.2760   ratio 1.12x
+```
+
+Only 24 and 48 show coherence. That is the fingerprint of connected geometry.
+
+**BUT: rendering the stride-48 extraction gave min 0.000 / max 1.000 exactly on
+all three axes, and a vision pass read the top view as a straight diagonal
+line.** Neither is a car. Something about the grouping is still wrong.
+
+**NEXT: autocorrelation/FFT on the float buffer to find the TRUE period before
+guessing another stride.**
