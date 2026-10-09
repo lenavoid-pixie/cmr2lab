@@ -599,3 +599,59 @@ at +1 gives nonsense across every column (all twelve collapse to
 **What `ff` as a leading byte in f2 means is still unknown.** A float with a
 leading `0xff` is a large negative number; a `u32` in that range sits above
 `0xff000000`. Neither has been ruled in or out. **Not guessing.**
+
+---
+
+## ★★ c14 IS THREE SEGMENTS — and 1204 is a BOUNDARY, not a record count
+
+Record-level structure, exact and gap-free:
+
+```
+records    0 ..  343   (344)   f2 null    f3 null
+records  344 .. 1203   (860)   f2 REAL    f3 null
+records 1204 .. 1303   (100)   f2 REAL    f3 REAL
+
+         344 + 860 = 1204
+```
+
+**The nulls are not scattered. f3 is null in ONE unbroken run, records 0–1203.
+f2 is null in one unbroken run, records 0–343. Then each switches on once and
+never switches back off.**
+
+```
+sentinel run lengths:
+   f3:  a single run of 1204
+   f2:  a single run of 344
+```
+
+### What `1204` actually is
+
+The header field at `+0x14` reads **1204**, and the loader allocates
+`count × 13 × 4` = `1204 × 52` = **62,608 bytes** — which is exactly the block
+size, and the whole-file identity depends on it.
+
+But the data is **48 bytes per unit**, and `1304 × 48 = 62,592`, leaving 16 bytes
+of slack inside the allocation.
+
+**1204 is the index where the third segment begins, not the number of records.**
+Everything from 1204 to 1303 is the 100-record tail the loader over-allocates
+for, and that is the 16-byte discrepancy that made the stride look wrong from
+the beginning.
+
+### Cross-model confirmation
+
+Same period, same value, in three unrelated cars:
+
+```
+205a1N.c3d  c14=1204  period 12 floats (48 B)  r=+0.863
+206a1N.c3d  c14=1147  period 12 floats (48 B)  r=+0.842
+cora1N.c3d  c14=1088  period 12 floats (48 B)  r=+0.846
+```
+
+**This is the format, not a quirk of one model.** Any explanation has to hold
+across all three.
+
+### Still open
+
+What the three segments *mean*, and what f2's leading `ff` byte encodes.
+**Not guessed.**
