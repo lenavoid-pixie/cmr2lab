@@ -176,3 +176,69 @@ known. What remains is **decoding one record type**.
 That is a bounded, findable problem, and the next step is to disassemble the
 consumers of the `c14` and `c10` arrays — the functions that read them after
 load — rather than staring at the bytes.
+
+---
+
+## Texture references — SOLVED
+
+The mesh records do **not** name textures. They hold a **u16 index** into the
+path table, and the engine resolves it at load.
+
+The resolver is `0x4b9910`:
+
+```
+mov  ax, word [ecx]        ; read the u16 index from the record
+shl  edx, 6                ; ×64
+add  edx, eax              ; ×65
+lea  ebp, [eax + edx*4]    ; -> table + index * 260
+call 0x4a9f90              ; fold to UPPERCASE
+push 0x5c                  ; '\'
+repne scasb                ; find the last backslash
+                           ; ... keep the filename
+```
+
+And `0x4a9f90` is the case folder — it walks the string and does
+`sub al, 0x20` on anything in `a`..`z`, with a CP1252 special-character jump
+table for `~ $ * | { }` and the Nordic range `0xE0`..`0xFF`.
+
+**That is why `FESGlODf` in the `.c3d` resolves to `fesglodf` on disk.** The
+mixed case is normalised to uppercase at load, and the lookup is
+case-insensitive because the engine made it so.
+
+### Verified against a real file
+
+`escf3.c3d`, path table uppercased as the engine would:
+
+```
+[0] FESGLODF   [1] FESGLOBU   [2] FESBODDF
+[3] FESBODBU   [4] DESLIGBR   [5] DESLIGRU
+```
+
+Scanning its three `c18` mesh records for u16 values below 6:
+
+```
+index 1 -> FESGLOBU   seen 45x   at rec0+90
+index 3 -> FESBODBU   seen  1x   at rec0+376
+```
+
+**45 references to one material inside a single 396-byte mesh record.** The
+indices are real, and they resolve.
+
+### Also confirmed
+
+`0x4b98f0` is a plain pointer fixup, called with `(ptr, base)`:
+
+```
+mov  eax, [ecx]
+cmp  eax, -1
+jne  .add
+mov  dword [ecx], 0     ; -1  ->  0
+ret
+.add:
+add  eax, edx           ; *ptr += base
+mov  [ecx], eax
+```
+
+It is called as `(record, base+0)` and `(record, base+4)` for each `c18`
+record — so a `c18` record begins with **two pointers that are fixed up
+separately**.
