@@ -769,3 +769,29 @@ What the byte values encode. Distribution is centred on 0x80 with 227 distinct
 values and strong local correlation — consistent with a quantised smooth
 quantity (angle, curvature, or a normal rotated into a record-local frame).
 **Not guessed.**
+
+---
+
+## ★ (f0, f1) RENDERS AS A CIRCLE — the normals are confirmed geometrically
+
+Rendered every plausible field pair as a scatter plot and looked at it, rather
+than probing statistically.
+
+**`f0 / f1`: a strong circular ring, with faint cross/spoke structure.**
+
+This is the geometric consequence of a measurement already in hand:
+`(f0, f1, f11)` has median length **exactly 1.0000**. If those three form a unit
+vector, then `(f0, f1)` is its projection to the XY plane — which *must* form a
+disc, and forms a **dense ring** when the vectors cluster near a plane
+(`f11 ≈ 0`, i.e. mostly-vertical normals).
+
+**So the float record contains a normal in fields 0, 1, 11.** Not a guess: the
+ring is what the unit-vector measurement predicts, and the render matches.
+
+**Note the field order — `0, 1, 11` — is not contiguous.** Whatever the record
+layout is, the semantic groups are not stored in simple runs.
+
+### Render artefacts
+
+`/root/cmr2_pairs.svg`, `/root/cmr2_pairs.png` — 11 field pairs, 1204 records.
+Only `f0/f1` has been read in detail. **The other ten panels are unanalysed.**
