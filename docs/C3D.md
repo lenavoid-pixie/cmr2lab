@@ -242,3 +242,51 @@ mov  [ecx], eax
 It is called as `(record, base+0)` and `(record, base+4)` for each `c18`
 record — so a `c18` record begins with **two pointers that are fixed up
 separately**.
+
+---
+
+## Vertex encoding — methods that FAILED (do not retry blind)
+
+Recorded so the next attempt doesn't walk the same three miles.
+
+**1. Dense float32 triples.** No run of 40+ sane floats at *any* byte offset in
+`205a1N.c3d`. Vertices are not plain float triples.
+
+**2. Dense int16 triples in car range (±6000).** Zero runs of 60+.
+
+**3. Int8 triples as normals.** Found a 599-triple run of int8 at offset 138,255
+with a tempting shift-by-one-byte neighbour — *looked* like packed normals.
+**It is not.** Magnitudes: min 24.0, median 97.6, max 176.8 — only 310/599 land in
+the 90–150 band a unit vector ×127 would give.
+
+**4. "Packed stream" detection by run length.** This one is the trap. Scanning
+every byte offset for long runs of non-zero int8 returns 317 candidates at
+offsets 9 bytes apart, each exactly 3 triples shorter than the last. **That is a
+sliding window over a high-entropy region, not a data structure.** The scan is
+not detecting structure; it is detecting "most bytes here are non-zero."
+
+### The missing control — the actual lesson
+
+**None of the scans above had a negative control.** Shuffling the same bytes and
+re-running the identical scan would have produced identical-looking runs, which
+would have disqualified approaches 3 and 4 immediately, for free.
+
+**A run-length scan over binary data needs a shuffled control or it means
+nothing.** Add one before trusting any pattern found this way.
+
+### What IS still true
+
+- The float values present in the records are exact binary fractions
+  (`0.6015625 = 77/128`), so **some** quantity in there is quantised.
+- `c20` records carry **RGBA colours** past the ten pointers — every one starts
+  `0xFF` (alpha 255). Verified on `escf3` and `205a1N`.
+- The structural side (container, header, array offsets, strides, trailers,
+  texture indices, pointer relocation, case folding) is **solved and
+  code-verified**. None of that is in doubt.
+
+### The next move
+
+**Stop scanning. Disassemble the render path.** The arrays are read by code
+after load — find the function that consumes the `c14`/`c10` base pointers and
+read the *stride it walks with* and the *conversion it applies*. The bytes will
+not tell you the encoding. The instructions that decode them will.
