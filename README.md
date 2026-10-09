@@ -63,3 +63,22 @@ is the rule here: **ship the code, let the user supply the files.**
 
 See `docs/CONTAINER.md` for the `.bfl` container layout, derived from real
 disc data and verified by the round-trip test above.
+
+## Update — the geometry format is cracked
+
+`docs/C3D.md` documents `PP_F`, shared by cars and tracks.
+
+**259 / 259 car models close exactly** on the identity:
+
+```
+48 + sum(count * stride) + TEXCOUNT*24 + TEXCOUNT*260  ==  file size
+```
+
+And the same parser reads a **stage road**: `temp.c3d` from `Sweden/Swe01Lo`
+closes exactly at 2,894,356 bytes — 16,157 nodes of 76 bytes, 29,399 segments
+of 52, 27 textures.
+
+Recovered from the loader at `CMR2.exe + 0x004B93C0`, reached from the
+`"PP_F"` compare at `+0x004B9389`.
+
+`N` = body, `L` = left wheel, `S` = right wheel.
