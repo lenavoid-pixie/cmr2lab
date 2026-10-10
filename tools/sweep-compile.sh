@@ -55,7 +55,13 @@ for f in "$TREE"/*.cpp; do
         *)     STD="-std=c++17";   EXTRA="" ;;
     esac
     # shellcheck disable=SC2086
-    if $CXX -target "$TARGET" -w -ferror-limit=0 $STD -DCMR2_NATIVE=1 \
+    # -Wno-c++11-narrowing: the i386 build passes this, and it is why "66/66 on
+    # i386" is true. Without it clang makes two 32-bit files fail on case values
+    # above INT_MAX (Game.cpp and GameInfo.cpp, HRESULT-style constants) -- the
+    # published sweep then reports 64, not 66. It does NOT change the x86_64
+    # count: both of those files already fail there on the pointer class first.
+    # measured both ways 2026-10-10.
+    if $CXX -target "$TARGET" -w -Wno-c++11-narrowing -ferror-limit=0 $STD -DCMR2_NATIVE=1 \
          -include "$PLAT/platform_types.h" \
          -I"$PLAT" -I"$TREE" -I"$SHIM" $EXTRA \
          -c "$f" -o "$OUT/obj/$b.o" > "$OUT/log/$n.log" 2>&1; then

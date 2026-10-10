@@ -24,6 +24,12 @@ on the earlier `CMR2Decomp/CMR2Decomp`). **This repository ships no part of it**
 122  files     135,805 lines
 ```
 
+*(Provenance note, added 2026-10-10 evening: this census is the tree **as received**.
+Our own port edits since — the `LONG` typedef and the 7 re-expressed size asserts — add
+235 lines, so the same command reads 122 files / **136,040** lines today. The file count
+is unchanged; only our own work moved the line count. Nothing else here needs re-reading
+because of it.)*
+
 Every function carries a `// FUNCTION: CMR2 0xADDRESS` marker: **3,364** of them.
 
 | classification | count |
@@ -122,6 +128,13 @@ real object, `-ferror-limit=0` so nothing is truncated, include order
 x86_64-linux-gnu  (the mandate)           26     40
 x86-linux-gnu     (i386, kept as oracle)  53     13
 ```
+
+*(This block is the pre-P3 measurement, kept as the record — see §6 for what
+replaced it. **Current, re-run on the Deck on 2026-10-10 evening: 33/66 on
+x86_64, and 66/66 on i386 — the second only with `-Wno-c++11-narrowing`, the flag
+the i386 build actually uses.** Without that flag the same sweep reports 64/66:
+`Game.cpp` and `GameInfo.cpp` put values above `INT_MAX` in 32-bit `case` labels.
+`tools/sweep-compile.sh` now passes it and reproduces both counts.)*
 
 This pair is a diagnostic, not two options:
 
@@ -271,7 +284,7 @@ these was reported before it had been run.
 |---|---|---|
 | 463 stubs | 16 placeholders | classifier called accessors stubs |
 | 19/66 compiles | 26/66 x86_64, 53/66 i386 | it had never been run |
-| 26/66 x86_64, 53/66 i386 | **33/66 x86_64, 66/66 i386** after P3+P1 | re-measured 2026-10-10 18:20, `docs/P3-P1-REPORT.md` |
+| 26/66 x86_64, 53/66 i386 | **33/66 x86_64, 66/66 i386** after P3+P1 — i386 only with `-Wno-c++11-narrowing` (64/66 without; see §3) | re-measured 2026-10-10 18:20, `docs/P3-P1-REPORT.md`, re-run 18:5x |
 | 149 D3D7 calls | 278 call sites / 20 methods | wrong regex, stated anyway |
 | 14 Win32 calls | 45 files include `windows.h` | regex ran without `re.M` |
 | 5 files with `__asm` | 6 files, 35 blocks | per-file count, missed a header |
