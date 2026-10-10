@@ -99,14 +99,19 @@ rather than a renderer.
 
 | target | pass | fail |
 |---|---|---|
-| `x86_64-linux-gnu` — the mandate | **26 / 66** | 40 |
-| `x86-linux-gnu` (i386, kept as an oracle) | **53 / 66** | 13 |
+| `x86_64-linux-gnu` — the mandate | **33 / 66** | 33 |
+| `x86-linux-gnu` (i386, kept as an oracle) | **66 / 66** | 0 |
 
-**27 files fail on x86_64 and pass on i386 — those 27 are blocked by nothing but
-pointer width.** Zero files pass on x86_64 and fail on i386. The other 13 fail
-on both, and they fail on **names, not width**: 12 of them on `LPHWAVEOUT` and
-one on `IID_IDirectInput7A`. Full breakdown, including what happens when you add
-that typedef: `PORT-PLAN.md` §3.
+*Re-measured 2026-10-10 18:20, after P3 + P1 (`docs/P3-P1-REPORT.md`): `LONG`/`ULONG`
+became 4 bytes, and the 7 pointer-bearing size asserts were re-expressed to carry
+both the 32-bit and the 64-bit layout. x86_64 went 27 → 33. Command:
+`bash work/CMR2/sweep64-r5.sh <outdir>`; i386 command: `work/P3/i386/resweep-p3.sh`
+(the flags `link32.sh` actually links with). The old numbers here were 26/66 and
+53/66.*
+
+**All 33 x86_64 failures are now ONE class: `cast from pointer to smaller type
+'int'` — 1,377 distinct sites.** Nothing else fails: no missing type names, no COM
+vtables, no negative-size asserts. Zero files pass on x86_64 and fail on i386.
 
 ### KNOWN GAPS
 

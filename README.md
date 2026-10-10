@@ -107,8 +107,11 @@ That is the whole distance. `src/port/` holds the native renderer — C + SDL3,
 built rootless with `zig cc`, opening a real Vulkan window and drawing a model
 straight out of the retail files. It renders a car. It is not a game yet.
 
-**How much of that decompilation compiles today: 26 of 66 translation units** on
-x86_64 (53 of 66 on i386, which is kept only as a diagnostic — those 27 extra
-files are blocked by pointer width and nothing else). `docs/PORT-PLAN.md` has the
-measurement, the method, the error census, and a list of the numbers this
-project published before running them and then had to fix.
+**How much of that decompilation compiles today: 33 of 66 translation units** on
+x86_64 (66 of 66 on i386, which is kept as a diagnostic and which is also the
+binary that boots — those 33 extra files are blocked by pointer width and nothing
+else: every remaining x86_64 error is `cast from pointer to smaller type 'int'`,
+1,377 sites). `docs/PORT-PLAN.md` has the measurement, the method, the error
+census, and a list of the numbers this project published before running them and
+then had to fix. The 2026-10-10 recount, including the two source fixes that moved
+x86_64 from 27 to 33, is `docs/P3-P1-REPORT.md`.

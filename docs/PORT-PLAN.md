@@ -271,6 +271,7 @@ these was reported before it had been run.
 |---|---|---|
 | 463 stubs | 16 placeholders | classifier called accessors stubs |
 | 19/66 compiles | 26/66 x86_64, 53/66 i386 | it had never been run |
+| 26/66 x86_64, 53/66 i386 | **33/66 x86_64, 66/66 i386** after P3+P1 | re-measured 2026-10-10 18:20, `docs/P3-P1-REPORT.md` |
 | 149 D3D7 calls | 278 call sites / 20 methods | wrong regex, stated anyway |
 | 14 Win32 calls | 45 files include `windows.h` | regex ran without `re.M` |
 | 5 files with `__asm` | 6 files, 35 blocks | per-file count, missed a header |

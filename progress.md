@@ -75,6 +75,52 @@ Read §0 as mine, dated, and everything below as the previous worker's.
 
 ---
 
+## 0.5. t2 CLOSED, and the two source steps of §5 done — appended 2026-10-10 18:25 EEST
+
+*Appended by the worker on job `t2-unblock-close` (from phone-Lena). This block is
+mine and dated; §0 and everything below it is the previous workers', untouched
+except where a correction is marked CORRECTED.*
+
+**`t2` is closed.** `state/task_queue.json`, id `t2`: `blocked` → `done`, finished
+2026-10-10T18:12:27, written under the daemon's own flock with a backup at
+`state/task_queue.json.bak-pre-t2close-20261010-181227`. There is no `blocked` entry
+left in the queue. The evidence is fresh, not quoted from a doc: from inside the
+daemon's own process `DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 SDL_VIDEODRIVER=unset
+SDL_ASSERT=abort`, and the 2026-10-09 presenter re-run under it printed
+`[ OK ] window+device+claim on driver=vulkan` … `PRESENTED 60 frames to a real
+swapchain`, exit 0, no dialog, nothing left on his screen.
+
+**P3 — the one line, and it was worth more than one line.** `LONG`/`ULONG` in
+`platform/platform_types.h` were 8 bytes; they are now `int32_t`/`uint32_t`.
+Measured against the i386 row as the reference: `POINT` 16→8, `RECT` 32→16, `SIZE`
+16→8, `MSG` 48→40 (`hwnd` is a real 8-byte pointer, so 40 is right), and
+`(LONG)(INT32_MAX+1)` wraps again. It unlocks **no** files by itself — 27/39 before
+and after, same file list — and **it is an ABI change: 14 mangled symbols move**
+(`Input.cpp` 12, `rhi/deck_dd7.o` 2), so every prebuilt object in the tree is
+invalidated by it. That is the reason to do it now, while the tree is still small.
+
+**P1.** The 7 pointer-bearing size asserts are re-expressed as
+`sizeof(X) == (sizeof(void*) == 8 ? 0xNN : 0xNN)` — both oracles kept, nothing
+deleted, the other 10 asserts untouched and re-verified as still passing. The
+64-bit numbers come from clang's own record-layout dump, not from arithmetic.
+**Sweep: 27 → 33 PASS, 39 → 33 FAIL, zero regressions**, and **every remaining
+failure in the tree is now one class**: `cast from pointer to smaller type 'int'`
+— 1,377 distinct sites across 33 files, led by `FrontendMenus.cpp` 305,
+`FrontendScreens.cpp` 236, `GameInfo.cpp` 176, `StageObjects.cpp` 135.
+
+**Verified against the port that actually runs, which is i386.** All 66 game
+objects rebuilt against the new headers, `deck_dd7.o` rebuilt, platform 5/5, link
+exit 0, and a 20-second windowed run compared with the pre-change binary:
+**normalised logs byte-identical — 59 lines, empty diff.** The three message boxes
+in that run ("Setting configuration to defaults", 2× "Make sure the CMR2 CD is in
+the CD drive") appear in **both** binaries: pre-existing, GAME2-res's lane, not
+caused here and not papered over.
+
+Method, numbers, and the things deliberately left alone (`HRESULT`/`LPARAM` width;
+P2 untouched): `work/P3/P3-P1-REPORT.md`. §5 items 2 and 3 are therefore done. What
+is left is §5 item 1 (the pad lane) and **P2 — the only thing now between this tree
+and 66/66.**
+
 ## 1. RIGHT NOW
 
 - **Daemon** `lena_daemon.py` pid **250660**, **2 workers**, model `deepseek-v4-flash`,
@@ -362,15 +408,22 @@ once by a test harness of mine.
 - **This repo's published port numbers are stale** — 26/66, 53/66, and "27 files
   blocked by pointer width" are one measurement behind; today's are 27 / 64
   (66 with the flag) and 37 files. Docs get fixed in §5 step 2, not before.
+  >> CORRECTED 18:25 (2026-10-10): the LONG line is fixed and re-measured. The
+  current x86_64 numbers are **33 PASS / 33 FAIL of 66**, all 33 failures being the
+  pointer-cast class. See §0.5 and `work/P3/P3-P1-REPORT.md`.
 - **The queue's status field is not a status report.** It says `partial` for ten jobs
   that are finished and `blocked` for one that is not. This file is the status
   report; trust it over the queue.
+  >> CORRECTED 18:25 (2026-10-10): the **blocked** one is closed now; the
+  partial-for-finished-jobs half is still true and still the daemon's file.
 - **Three commits were sitting on this Deck unpushed** (the dependency-map work).
   They went up at 14:30 with the previous rewrite of this file — so if you read the
   repo before then, you did not see them.
 - **`blocked: [t2]` on the wire is the queue's stale entry, not a real blocker.**
   The outbox is a faithful copy of a field that is wrong (§4). I did not fix the
   queue field; the daemon owns that file.
+  >> CORRECTED 18:25 (2026-10-10): the queue field is fixed — **t2 is now done**.
+  See §0.5. The wire will show it on the next relay tick.
 - **The queue contains a duplicate id.** `GAME2-r5` appears **twice**, both `done`
   (a hand-typed INPUT job, and a later "GO HAM ON THE GAME"). It is harmless today
   because both halves are finished, but two consequences are real: `queue_total: 33`
