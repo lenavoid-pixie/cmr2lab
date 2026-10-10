@@ -23,7 +23,7 @@ Paths, so they line up on both ends:
 
 | short name | real path on the Deck |
 |---|---|
-| the install | `~/lena/.lena_cmr2/game` (2.26 GB retail PC install; 259 `.c3d`, 220 car containers) |
+| the install | `~/lena/.lena_cmr2/game` (**638 MB** retail PC install; 259 `.c3d`, 220 car containers. It said 2.26 GB here — that was the disc-image copies in `gamedata/`, corrected §0b/§6) |
 
 ## 0a. THE MIRRORED FLANK — CLOSED. added 2026-10-10 18:27 EEST — cited by *subject*, not by hash, because this repo is rebased onto `origin/main` under it: `git log --oneline --grep='flank mirroring'` finds it (it said 18:35 EEST here at first, later than the commit that carried it; corrected in the re-verification pass)
 
@@ -263,6 +263,38 @@ counts exact:
   "1–3 flank triangles each", which is true of the one-sided texture files, not of
   these; the substantive claim — they are interiors, not bodies — was right.)
 
+
+## 0b. THE FRONT DOOR — REVIEWED, ONE NUMBER FIXED. appended 2026-10-10 18:45 EEST
+
+The phone rewrote `README.md` as a front door (commits `0e99687`, `dd05c98`, `412ab9e`:
+front door, glossary, and the original README archived verbatim) and invited this side to
+overwrite anything that misstates the work. Reviewed on the Deck against the tree, not
+against memory. What re-ran, and what changed:
+
+- **Re-ran — all reproduce.** `cmr2lab repack` against the install: **581/581
+  byte-identical, 7.8 s**. Compile sweep: **33/66 on x86_64** (33 FAIL, every first error
+  the pointer class, 1,504 error lines, **1,377 distinct `file:line` sites**) and **66/66 on
+  i386 with `-Wno-c++11-narrowing`**. D3D7 regex: **278 sites / 20 methods**, 225 of them in
+  `Graphics.cpp` (81%), **22 draws / 256 state**. `<windows.h>`: 45 files. `__asm`: 35
+  blocks in 6 files (a 36th mention is inside a comment), every block inside `#ifdef
+  _MSC_VER` with an `#else`. Install layout for the README's example path:
+  `Game/Cars/205a1.bfl` → `unpack` gives **27 textures**.
+- **One number was wrong: `2.26 GB`, now fixed.** It is not the install — it is the disc
+  copies in `gamedata/`. Install **638 MB**, the 582 `.bfl` **417 MB**. (§6, resolved.)
+- **"66 of 66 on i386" was only true with a flag the published harness did not pass.**
+  Without `-Wno-c++11-narrowing`, `tools/sweep-compile.sh` reports **64/66** — `Game.cpp`
+  and `GameInfo.cpp` fail on 32-bit `case` values above `INT_MAX`. The flag is now in the
+  script with the reason, and PORT-PLAN §3 carries the caveat. The x86_64 count is
+  unaffected (verified both ways).
+- **One sentence was sharpened, not corrected.** The plain-words section read "The renderer
+  is being rewritten. It draws a car ... onto your screen using a real Vulkan window",
+  which a reader can take as *the game* drawing it. It now says on the first screen that the
+  *data* is the game's and the *draw code* is this project's viewer, with `FRAME-NOTE.md` §2
+  as the reference. Also fixed: "Nothing you type here can break your Deck" — not true of a
+  terminal, only of the block below it.
+- **Not touched:** the archived body (verbatim by design), the phone's other commits, the
+  repo name, and the roadmap list itself — only item 4 gained a clause saying which part of
+  it already exists (`FrontendMenus.cpp`).
 
 ## 0. THE FRAME MIAMI ASKED FOR — added 2026-10-10 15:15 EEST by the worker on
 ## the "make the port a pretty thing to look at" job.
@@ -655,6 +687,12 @@ once by a test harness of mine.
   install myself: 908 files, **0.59 GB** by summed file size, 610 MB by `du`;
   the 582 `.bfl` are 0.39 GB. The container count is right (581 + 1 skipped); the
   size figure is not. Not resolved, so not claimed.
+  >> RESOLVED 2026-10-10 18:45. Re-measured: install **638,124,559 B / 611 MiB (907
+  files)**, the 582 `.bfl` **417,400,892 B**. The number's origin is now known: 702.8 MB
+  (`cmr2.iso`) + 759.6 MB (`cmr2.zip`) + 807.1 MB (`Codemasters.bin`) = **2.269 GB** — three
+  copies of the disc, not the game. `README.md` now publishes 417 MB / 638 MB, and
+  `docs/README-ARCHIVE.md` carries an erratum because the bad figure sits in its verbatim
+  body. Round-trip re-run the same minute: **581/581 byte-identical, 7.8 s.**
 - **This repo's published port numbers are stale** — 26/66, 53/66, and "27 files
   blocked by pointer width" are one measurement behind; today's are 27 / 64
   (66 with the flag) and 37 files. Docs get fixed in §5 step 2, not before.
