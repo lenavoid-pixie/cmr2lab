@@ -28,16 +28,19 @@
  *     - face records 76 bytes, three u16 indices at +52, indexed from C20+12.
  *     - the part record: +12 vblk (byte offset, stride 48), +16 V (vertex count),
  *       +36 face offset (byte offset into the c20 block), +40 F (face count).
- *     - BFL = trailing run of 24-byte records (name[12], u32, u32, u32) with the
- *       texture blobs earlier in the payload in TOC order. Every blob is DXT5.
+ *     - BFL = CMPR container: "CMPR" + u32 size, texture blocks, then the TOC
+ *       pointer in the LAST FOUR BYTES of the payload. TOC entries are
+ *       {u32 size; u32 offset; u32 nameLen; name padded to 4} and each block
+ *       sits at payload + offset. 44 of the 220 car .bfl hold DDS(DXT5), 176
+ *       hold TGA -- both decode now. Verified byte-for-byte against an
+ *       independent decoder for every block of eight cars (81 blocks).
  *   INFERRED / STILL OPEN, and flagged honestly rather than papered over:
- *     - WHEEL PLACEMENT. The four wheel parts carry identical geometry and sit at
- *       the local origin; the part record has no translation field. It is not in
- *       the .c3d, and not in the .cin (that file is CMPR texture data). Best
- *       remaining lead: the c18 block -- 15 records of 396 bytes, the node /
- *       scene-graph block that the header's packed type pairs (0x000E000F,
- *       0x00020003) refer to. Until that is decoded, wheels are placed by
- *       inference. Override at runtime: WX / WY / WZ, or NOWHEELPLACE=1.
+ *     - WHEEL PLACEMENT. DONE (M2, below). The four wheel meshes carry no
+ *       position of their own -- the position lives in the .c3d's scene-node
+ *       block, and this reads it: nodes 1..4 on 205a1N give wheelbase 2.539 m
+ *       and track 1.435 m, which are the car's own numbers. Set NODEPLACE=0 to
+ *       fall back to the old mirrored-corner inference (WX/WY/WZ, or
+ *       NOWHEELPLACE=1) for an A/B.
  *     - PER-PART TEXTURE ID. Part-record dwords 12/13 hold something material-ish
  *       (9820 / 1620 / 2960 / 4740 ...) but nothing in 0..TEXCOUNT. Textures are
  *       therefore bound by matching the part NAME against the .c3d's own trailer
@@ -105,6 +108,12 @@ static int includes_ci(const char *hay, const char *needle) {
 /* ------------------------------------------------------------- DXT5/BC3 --- */
 /* One 16-byte block -> 4x4 RGBA8, written with the given row pitch. */
 static void dxt5_block(const uint8_t *b, uint8_t *out, int pitch) {
+    /* BC3 block layout, and this time read in the order the format defines:
+     *   b[0..1]    alpha endpoints
+     *   b[2..7]    48-bit alpha indices, 3 bits per texel, texel 0 in bits 0..2
+     *   b[8..9]    colour endpoint 0 (565), b[10..11] colour endpoint 1
+     *   b[12..15]  32-bit colour indices, 2 bits per texel, texel 0 in bits 0..1
+     */
     uint16_t c0 = (uint16_t)(b[8] | (b[9] << 8));
     uint16_t c1 = (uint16_t)(b[10] | (b[11] << 8));
     uint8_t r[4], g[4], bl[4];
@@ -116,31 +125,31 @@ static void dxt5_block(const uint8_t *b, uint8_t *out, int pitch) {
     r[1] = (uint8_t)((r1 << 3) | (r1 >> 2));
     g[1] = (uint8_t)((g1 << 2) | (g1 >> 4));
     bl[1] = (uint8_t)((b1 << 3) | (b1 >> 2));
-    if (c0 > c1) {
-        for (int i = 0; i < 3; i++) {
-            r[2 + i]  = (uint8_t)(((3 - i) * r[0]  + (i + 1) * r[1])  / 3);
-            g[2 + i]  = (uint8_t)(((3 - i) * g[0]  + (i + 1) * g[1])  / 3);
-            bl[2 + i] = (uint8_t)(((3 - i) * bl[0] + (i + 1) * bl[1]) / 3);
-        }
-    } else {
-        for (int i = 0; i < 3; i++) {
-            r[2 + i]  = (uint8_t)(((2 - i) * r[0]  + (i + 1) * r[1])  / 2);
-            g[2 + i]  = (uint8_t)(((2 - i) * g[0]  + (i + 1) * g[1])  / 2);
-            bl[2 + i] = (uint8_t)(((2 - i) * bl[0] + (i + 1) * bl[1]) / 2);
-        }
+    if (c0 > c1) {                       /* 4-colour mode: 2/3, 1/3, then 1/3, 2/3 */
+        r[2]  = (uint8_t)((2 * r[0]  + r[1]) / 3);
+        g[2]  = (uint8_t)((2 * g[0]  + g[1]) / 3);
+        bl[2] = (uint8_t)((2 * bl[0] + bl[1]) / 3);
+        r[3]  = (uint8_t)((r[0]  + 2 * r[1]) / 3);
+        g[3]  = (uint8_t)((g[0]  + 2 * g[1]) / 3);
+        bl[3] = (uint8_t)((bl[0] + 2 * bl[1]) / 3);
+    } else {                             /* 3-colour mode: midpoint, then black */
+        r[2]  = (uint8_t)((r[0]  + r[1]) / 2);
+        g[2]  = (uint8_t)((g[0]  + g[1]) / 2);
+        bl[2] = (uint8_t)((bl[0] + bl[1]) / 2);
+        r[3] = g[3] = bl[3] = 0;
     }
     uint8_t a[8];
-    a[0] = b[4]; a[1] = b[5];
-    if (a[0] > a[1]) {
+    a[0] = b[0]; a[1] = b[1];
+    if (a[0] > a[1]) {                   /* 8-alpha mode */
         for (int i = 1; i <= 6; i++)
             a[i + 1] = (uint8_t)(((7 - i) * a[0] + i * a[1]) / 7);
-    } else {
+    } else {                             /* 6-alpha mode: 4 values, then 0 and 255 */
         for (int i = 1; i <= 4; i++)
             a[i + 1] = (uint8_t)(((5 - i) * a[0] + i * a[1]) / 5);
         a[6] = 0; a[7] = 255;
     }
-    uint32_t cbits = (uint32_t)b[0] | ((uint32_t)b[1] << 8) |
-                     ((uint32_t)b[2] << 16) | ((uint32_t)b[3] << 24);
+    uint32_t cbits = (uint32_t)b[12] | ((uint32_t)b[13] << 8) |
+                     ((uint32_t)b[14] << 16) | ((uint32_t)b[15] << 24);
     uint64_t abits = 0;
     for (int i = 0; i < 6; i++) abits |= (uint64_t)b[2 + i] << (8 * i);
     for (int y = 0; y < 4; y++) {
@@ -202,9 +211,84 @@ done:
     return out;
 }
 
+/* ------------------------------------------------------------- .tga blobs ---
+ * 176 of the 220 car .bfl files hold .tga, not .dds. Until this existed the
+ * whole ".tga" half of the game's car textures was unreachable: bfl_parse
+ * scored blocks against "DDS " only, so a TGA container scored 0 and was
+ * rejected whole, and 205c1 rendered 27 placeholders and a white car.
+ *
+ * The blocks are plain TGA: 18-byte header, no colour map, no id field, type 2
+ * (uncompressed truecolour), 24 or 32 bpp, descriptor 0x08 (alpha present,
+ * origin bottom-left), then a 26-byte TGA 2.0 footer. RLE (type 10) is decoded
+ * too -- not because any block here uses it, but because a TGA that suddenly
+ * does should not go quietly white.
+ */
+static void tga_store(uint8_t *out, int W, int H, int topdown, int bpp,
+                      size_t idx, const uint8_t *px) {
+    size_t y = idx / (size_t)W, x = idx % (size_t)W;
+    if (!topdown) y = (size_t)H - 1 - y;          /* origin bottom-left */
+    uint8_t *o = out + (y * (size_t)W + x) * 4;
+    o[0] = px[2]; o[1] = px[1]; o[2] = px[0];     /* BGR(A) -> RGBA */
+    o[3] = (bpp == 4) ? px[3] : 0xff;
+}
+
+static uint8_t *tga_decode(const uint8_t *d, size_t n, int *w, int *h) {
+    if (n < 18) return NULL;
+    int idlen = d[0], cmap = d[1], type = d[2];
+    int W = (int)ru16(d, 12), H = (int)ru16(d, 14);
+    int depth = d[16], desc = d[17];
+    if (cmap || idlen > 255) return NULL;
+    if (type != 2 && type != 10) return NULL;
+    if (depth != 24 && depth != 32) return NULL;
+    if (W <= 0 || H <= 0 || W > 8192 || H > 8192) return NULL;
+    int bpp = depth / 8;
+    size_t total = (size_t)W * (size_t)H;
+    size_t p = 18 + (size_t)idlen, k = 0;
+    if (p >= n) return NULL;
+    uint8_t *out = calloc(total * 4, 1);
+    if (!out) return NULL;
+    int topdown = (desc & 0x20) != 0;             /* bit 5 set = top-left */
+    if (type == 2) {
+        if (p + total * (size_t)bpp > n) { free(out); return NULL; }
+        const uint8_t *src = d + p;
+        for (; k < total; k++)
+            tga_store(out, W, H, topdown, bpp, k, src + k * (size_t)bpp);
+    } else {                                      /* type 10, run-length */
+        uint8_t buf[4];
+        while (k < total) {
+            if (p >= n) break;
+            int hdr = d[p++], run = (hdr & 0x7f) + 1;
+            if (hdr & 0x80) {
+                if (p + (size_t)bpp > n) break;
+                memcpy(buf, d + p, (size_t)bpp); p += (size_t)bpp;
+                for (int r = 0; r < run && k < total; r++, k++)
+                    tga_store(out, W, H, topdown, bpp, k, buf);
+            } else {
+                for (int r = 0; r < run && k < total; r++, k++) {
+                    if (p + (size_t)bpp > n) break;
+                    memcpy(buf, d + p, (size_t)bpp); p += (size_t)bpp;
+                    tga_store(out, W, H, topdown, bpp, k, buf);
+                }
+            }
+        }
+    }
+    *w = W; *h = H;
+    return out;
+}
+
+/* One door for both containers. The magic decides, not the filename: a block
+ * whose TOC entry says .tga but whose bytes say "DDS " still decodes. */
+static uint8_t *tex_decode(const uint8_t *d, size_t n, int *w, int *h) {
+    if (n >= 4 && !memcmp(d, "DDS ", 4)) return dds_decode(d, n, w, h);
+    if (n >= 18 && d[1] == 0 && (d[2] == 2 || d[2] == 10) &&
+        (d[16] == 24 || d[16] == 32))
+        return tga_decode(d, n, w, h);
+    return NULL;
+}
+
 /* ------------------------------------------------------------ BFL archive --- */
 #define BFL_MAX 1024
-typedef struct { char name[16]; size_t off, len; } BflEnt;
+typedef struct { char name[64]; size_t off, len; } BflEnt;
 typedef struct { BflEnt e[BFL_MAX]; int n; } Bfl;
 
 /* ---- .bfl archive ---------------------------------------------------------
@@ -259,7 +343,7 @@ static int bfl_score(const uint8_t *p, size_t len, size_t start, int cnt) {
     return val;
 }
 
-static int bfl_parse(const uint8_t *p, size_t len, Bfl *out) {
+static int bfl_parse_heuristic(const uint8_t *p, size_t len, Bfl *out) {
     out->n = 0;
     if (len < 64) return 0;
 
@@ -321,6 +405,75 @@ static int bfl_parse(const uint8_t *p, size_t len, Bfl *out) {
     return n;
 }
 
+/* ---- the container spec, from the MOD (not from my guessing) --------------
+ * Verified against the published reader -- work/cmr2lab-publish/tools/
+ * bfl-read.py, which is the BFLExtractCsharp patterns/bfl.hexpat spec:
+ *
+ *   "CMPR" | u32 containerSize          (8-byte header; containerSize counts
+ *                                        the bytes AFTER the 8-byte header)
+ *   ... pixel blocks, block i at absolute offset  entry[i].offset + 8  ...
+ *   u32 tocPointer                      <- the LAST 4 BYTES of the payload
+ *                                          (== containerSize + 4)
+ *   TOC at tocPointer + 8, entries of:
+ *        u32 size; u32 offset; u32 strLen; char name[strLen], padded to 4
+ *
+ * The previous parser guessed a 24-byte stride backwards off the end and
+ * scored a candidate TOC by validating "DDS " magics. Both the stride and the
+ * scorer are guesses, and both are wrong in the same direction:
+ *   - it found 26 of 27 blocks on 205a1 (the truncated-looking last record
+ *     is not truncated at all under this spec -- the name is variable-length),
+ *   - it validated nothing on a .tga container, so 176 of the 220 car .bfl
+ *     files were rejected whole and their cars drew flat white.
+ * With the spec there is no scoring, no stride and no guessing: the pointer
+ * is where the format says it is, and every field is range-checked before use.
+ * The heuristic stays underneath as a fallback for a payload that is not CMPR.
+ *
+ * Checked on both kinds: 205a1 (dds, 27/27) and 205c1 (tga, 27/27).
+ */
+static int bfl_parse_cmpr(const uint8_t *p, size_t len, Bfl *out) {
+    out->n = 0;
+    /* load_res() normally strips "CMPR" + containerSize and hands over the
+     * payload alone. Accept both -- see the coordinate note above. */
+    size_t pay = (len >= 16 && !memcmp(p, "CMPR", 4)) ? 8 : 0;
+    if (len < pay + 16) return 0;
+    size_t plen   = len - pay;                       /* payload length */
+    uint32_t tocptr = ru32(p, len - 4);              /* last 4 bytes of the file */
+    if ((size_t)tocptr + 12 > plen) return 0;
+    size_t pos = pay + (size_t)tocptr;
+
+    int n = 0;
+    while (n < BFL_MAX && pos + 12 <= len - 4) {
+        uint32_t size = ru32(p, pos), off = ru32(p, pos + 4), slen = ru32(p, pos + 8);
+        pos += 12;
+        if (slen < 1 || slen > 48) break;            /* end of the TOC */
+        if (pos + slen > len) break;
+        char nm[64];
+        memcpy(nm, p + pos, slen);
+        nm[slen] = 0;
+        for (uint32_t k = 0; k < slen; k++)
+            if (nm[k] < 0x20 || nm[k] > 0x7e) return n;   /* not a TOC after all */
+        pos += slen + ((4 - (slen % 4)) % 4);        /* pad to 4 */
+
+        size_t data = pay + (size_t)off;
+        if (size < 16 || data + size > len) continue;
+        char *dot = strchr(nm, '.'); if (dot) *dot = 0;
+        for (char *c = nm; *c; c++) if (*c >= 'A' && *c <= 'Z') *c += 32;
+        snprintf(out->e[n].name, sizeof out->e[n].name, "%s", nm);
+        out->e[n].off = data;
+        out->e[n].len = size;
+        n++;
+    }
+    out->n = n;
+    return n;
+}
+
+static int bfl_parse(const uint8_t *p, size_t len, Bfl *out) {
+    int n = bfl_parse_cmpr(p, len, out);
+    if (n > 0) return n;
+    printf("[WARN] .bfl is not a CMPR container -- falling back to the heuristic\n");
+    return bfl_parse_heuristic(p, len, out);
+}
+
 static const uint8_t *bfl_find(const Bfl *b, const uint8_t *p, const char *name, size_t *blen) {
     char key[32];
     snprintf(key, sizeof key, "%s", name);
@@ -369,6 +522,11 @@ static const uint8_t *bfl_find(const Bfl *b, const uint8_t *p, const char *name,
 #define MESH_VCOUNT       16     /* 0x10   Mesh::field_0x10            */
 #define MESH_TRIOFF       36     /* 0x24   Mesh::pTriangles   (bytes)  */
 #define MESH_TCOUNT       40     /* 0x28   Mesh::triangleCount         */
+#define NODE_OBJ          12     /* 0x0c   SceneNode::pObject (mesh off)*/
+#define NODE_LOCAL        0x58   /*        SceneNode::local  (FixMatrix)*/
+#define NODE_TYPE        0x178  /*        SceneNode::type             */
+#define MESH_FLAGS       0x30   /* 0x30   Mesh::flags                 */
+#define TRI_TEXOFF       4      /* 0x04   MeshTriangle texture, field_0x2c = 0 */
 
 #define MESH_INDEXED 0
 #define MESH_STRIP   1
@@ -382,10 +540,29 @@ typedef struct {
     uint32_t built;     /* indices we actually emitted */
     uint32_t istart;    /* first index in the combined index buffer */
     uint32_t vstart;    /* first vertex of this part in the combined buffer */
-    int      tex;
+    int      tex;            /* fallback only: the name-matched pick_tex()  */
+    unsigned int meshflags;  /* Mesh::flags, +0x30: cull, alpha, lighting   */
     int      transparent;
     int      wheel;
 } C3dPart;
+
+/* One scene node's placement of one part: a 3x3 rotation and a translation,
+ * both already converted out of 16.16 to metres. */
+typedef struct {
+    int   have, node, identity;
+    float m[9], t[3];
+} NodeX;
+
+/* One draw: a contiguous run of triangles that share one texture.
+ * This is the game's own unit of work -- Game_DrawMeshTextureRuns walks the
+ * triangle list in order and starts a new draw whenever the texture changes,
+ * and the texture is the int32 at record+4 + field_0x2c*4 (field_0x2c = 0). */
+typedef struct {
+    uint32_t istart, icount;   /* into C3d::idx                              */
+    int      tex;              /* index into the .c3d texture-name table     */
+    int      alpha;            /* mesh flag bit 3, as Graphics_DrawMeshLOD   */
+    int      part;             /* which part, for the log                    */
+} DrawRun;
 
 typedef struct {
     uint8_t *p; size_t len;
@@ -399,6 +576,7 @@ typedef struct {
     float    lo[3], hi[3];
     int      ntex;
     char     texname[MAXTEX][32];
+    DrawRun *run; int nruns, runcap;   /* per-triangle texture runs */
 } C3d;
 
 /* WHICH READING OF THE PART RECORD WE ARE RENDERING.  See the long comment
@@ -475,7 +653,7 @@ static int cmp_f(const void *a, const void *b) {
     return (x > y) - (x < y);
 }
 
-static int c3d_load(C3d *c, const char *path, int wheelplace,
+static int c3d_load(C3d *c, const char *path, int wheelplace, int nodeplace,
                     float wx, float wy, float wz) {
     memset(c, 0, sizeof *c);
     c->p = load_res(path, &c->len);
@@ -563,6 +741,85 @@ static int c3d_load(C3d *c, const char *path, int wheelplace,
     MeshStats S; memset(&S, 0, sizeof S);
     float lo[3] = { 1e9f, 1e9f, 1e9f }, hi[3] = { -1e9f, -1e9f, -1e9f };
     int corner = 0, nedge = 0, truncated = 0, fb_bad = 0;
+    int texruns = 0;                 /* runs created from the file's texture IDs */
+    int texcount[MAXTEX]; memset(texcount, 0, sizeof texcount);
+    int runsat[MAXPARTS]; memset(runsat, 0, sizeof runsat);
+    int texruns_before = 0;
+
+    /* ---- M2: the node transforms, straight out of the file ----------------
+     * Every mesh in a car is instanced by a scene node, and the node carries
+     * the 16.16 transform. This is where the wheels have always been: the
+     * part records hold geometry only, no position, which is why the previous
+     * code had to mirror corner signs and guess. Node -> mesh is the pObject
+     * field, a byte offset into the mesh array, so the part index is
+     * pObject / 288 and it is worth checking that it divides exactly.
+     * --------------------------------------------------------------------- */
+    NodeX nx[MAXPARTS];
+    memset(nx, 0, sizeof nx);
+    int nplaced = 0;
+    float idmove = 0.0f;   /* worst vertex move by an identity node */
+    int nidbad = 0;
+    if (nodeplace) {
+        for (int n = 0; n < (int)c18 && n < 4096; n++) {
+            const uint8_t *r = c->p + 48 + (size_t)n * NODE_STRIDE;
+            uint32_t obj = ru32(r, NODE_OBJ);
+            if (obj == 0xffffffffu || obj % MESH_STRIDE) continue;
+            uint32_t mi = obj / MESH_STRIDE;
+            if (mi >= (uint32_t)c1a || (int)mi >= MAXPARTS) continue;
+            if (ru32(r, NODE_TYPE) != 0) continue;          /* 0 = SCENE_NODE_MESH */
+            if (nx[mi].have) continue;                      /* two nodes, one mesh */
+            /* 16.16 fixed -> metres. Read as int32 and scaled; do NOT write
+             * through a const array (that optimises to garbage). */
+            /* FixMatrix is FOUR 4-word rows carried as 16 words:
+             *   right.xyz (0..2), rw (3), up.xyz (4..6), uw (7),
+             *   forward.xyz (8..10), fw (11), position.xyz (12..14), pw (15)
+             * The w word sits BETWEEN the vectors, so the rotation is words
+             * 0,1,2 / 4,5,6 / 8,9,10 and NOT the first nine words. Reading the
+             * first nine gives a matrix that looks like the identity when
+             * printed (1,0,0,0,0,1,0,0,0) and shears every vertex with it:
+             * y came out 0 and z took y's value, which flattened the whole car
+             * to 0.36 m tall. Exactly the failure this file keeps producing --
+             * arithmetic that runs, produces a shape, and is wrong. */
+            float f[16];
+            for (int k = 0; k < 16; k++)
+                f[k] = (float)(int32_t)ru32(r, NODE_LOCAL + 4 * k) / 65536.0f;
+            nx[mi].m[0] = f[0]; nx[mi].m[1] = f[1]; nx[mi].m[2] = f[2];
+            nx[mi].m[3] = f[4]; nx[mi].m[4] = f[5]; nx[mi].m[5] = f[6];
+            nx[mi].m[6] = f[8]; nx[mi].m[7] = f[9]; nx[mi].m[8] = f[10];
+            for (int k = 0; k < 3; k++) nx[mi].t[k] = f[12 + k];
+            /* identity test on the 16.16 WORDS, at the padded offsets */
+            int ident = ((int32_t)ru32(r, NODE_LOCAL +  0) == 65536 &&
+                         (int32_t)ru32(r, NODE_LOCAL +  4) == 0     &&
+                         (int32_t)ru32(r, NODE_LOCAL +  8) == 0     &&
+                         (int32_t)ru32(r, NODE_LOCAL + 16) == 0     &&
+                         (int32_t)ru32(r, NODE_LOCAL + 20) == 65536 &&
+                         (int32_t)ru32(r, NODE_LOCAL + 24) == 0     &&
+                         (int32_t)ru32(r, NODE_LOCAL + 32) == 0     &&
+                         (int32_t)ru32(r, NODE_LOCAL + 36) == 0     &&
+                         (int32_t)ru32(r, NODE_LOCAL + 40) == 65536);
+            nx[mi].have = 1;
+            nx[mi].node = n;
+            /* "trivial" = no rotation AND no translation, which is every body
+             * part. Those must not move a single vertex; anything else is a
+             * misread matrix and this counter is what says so. */
+            nx[mi].identity = ident && f[12] == 0.0f && f[13] == 0.0f && f[14] == 0.0f;
+            if (getenv("NODEDEBUG")) {
+                printf("[NDBG] node %d raw:", n);
+                for (int k = 0; k < 16; k++) printf(" %d", (int32_t)ru32(r, NODE_LOCAL + 4 * k));
+                printf("\n        f:");
+                for (int k = 0; k < 16; k++) printf(" %.3f", f[k]);
+                printf("\n        m:");
+                for (int k = 0; k < 9; k++) printf(" %.3f", nx[mi].m[k]);
+                printf("  ident=%d\n", ident);
+            }
+            char nm[13];
+            memcpy(nm, c->p + C1A + (size_t)mi * MESH_STRIDE, 12); nm[12] = 0;
+            for (char *q2 = nm; *q2; q2++) if (*q2 == ' ') *q2 = 0;
+            printf("[NODE] part %2u %-12s <- node %2d  pos=(%.3f, %.3f, %.3f)%s\n",
+                   mi, nm, n, nx[mi].t[0], nx[mi].t[1], nx[mi].t[2],
+                   ident ? "  [identity]" : "  [mirrored/rotated]");
+        }
+    }
 
     for (int i = 0; i < c1a; i++) {
         const uint8_t *r = c->p + C1A + (size_t)i * MESH_STRIDE;
@@ -573,8 +830,13 @@ static int c3d_load(C3d *c, const char *path, int wheelplace,
         P->V      = ru32(r, MESH_VCOUNT);
         P->facoff = ru32(r, MESH_TRIOFF);
         P->F      = ru32(r, MESH_TCOUNT);
+        /* The texture for this part is the one its triangles name; pick_tex()
+         * survives only for the STRIP control path, which throws the face
+         * records away. The name match is NOT the answer any more. */
         P->tex    = pick_tex(c, P->name);
-        P->transparent = includes_ci(P->name, "semit") || includes_ci(P->name, "gl");
+        P->meshflags = ru32(r, MESH_FLAGS);
+        /* alpha: mesh flags bit 3. cull: bit 0. Both read, neither guessed. */
+        P->transparent = (P->meshflags >> 3) & 1;
         P->wheel  = includes_ci(P->name, "whl") || includes_ci(P->name, "wheel");
         P->istart = (uint32_t)c->nidx;
         P->vstart = (uint32_t)c->nverts;
@@ -601,10 +863,38 @@ static int c3d_load(C3d *c, const char *path, int wheelplace,
         for (int k = 0; k < nv; k++) {
             uint8_t *dst = c->verts + (size_t)c->nverts * VSTRIDE;
             vtx_out(c->p, vb, (uint32_t)k, dst);
-            if (q >= 0) {
-                /* INFERRED placement -- M2 replaces this with the c18 decode.
-                 * Mirror the corner signs so the four wheels land on four
-                 * corners.  Override with WX/WY/WZ, or NOWHEELPLACE=1. */
+            /* SANITISE BEFORE THE TRANSFORM, not after. A non-finite position
+             * component multiplied by a zero in the rotation matrix poisons
+             * the OTHER two axes as well (NaN * 0 == NaN), so a vertex that
+             * used to survive as NaN-on-one-axis collapses to the origin and
+             * takes the triangle with it. Clamp first; then transform. */
+            {
+                float *w = (float *)dst;
+                for (int a = 0; a < 3; a++)
+                    if (w[a] != w[a] || fabsf(w[a]) > 1e5f) { w[a] = 0.0f; };
+            }
+            if (nx[i].have) {
+                /* THE FILE'S OWN TRANSFORM (M2). p' = p.x*right + p.y*up +
+                 * p.z*forward + position, the same convention the game's
+                 * FixMatrix_Multiply uses. */
+                float *v = (float *)dst;
+                float x = v[0], y = v[1], z = v[2];
+                float nx0 = x * nx[i].m[0] + y * nx[i].m[3] + z * nx[i].m[6] + nx[i].t[0];
+                float ny0 = x * nx[i].m[1] + y * nx[i].m[4] + z * nx[i].m[7] + nx[i].t[1];
+                float nz0 = x * nx[i].m[2] + y * nx[i].m[5] + z * nx[i].m[8] + nx[i].t[2];
+                /* SELF-CHECK. Every body part in every car carries an identity
+                 * node, so an identity node that moves a vertex means the
+                 * matrix is being read wrong -- which is exactly how the first
+                 * version of this failed, silently, at 1/7th scale. */
+                if (nx[i].identity) {
+                    float d = fabsf(nx0 - x) + fabsf(ny0 - y) + fabsf(nz0 - z);
+                    if (d > idmove) idmove = d;
+                    if (d > 1e-3f) nidbad++;
+                }
+                v[0] = nx0; v[1] = ny0; v[2] = nz0;
+            } else if (q >= 0) {
+                /* fallback only: no node referenced this wheel, so fall back to
+                 * the old inference. WX/WY/WZ or NOWHEELPLACE=1 override it. */
                 static const float SX[4] = { +1.0f, +1.0f, -1.0f, -1.0f };
                 static const float SZ[4] = { +1.0f, -1.0f, +1.0f, -1.0f };
                 float *v = (float *)dst;
@@ -614,7 +904,6 @@ static int c3d_load(C3d *c, const char *path, int wheelplace,
             }
             float *v = (float *)dst;
             for (int a = 0; a < 3; a++) {
-                if (v[a] != v[a] || fabsf(v[a]) > 1e5f) v[a] = 0.0f;
                 if (v[a] < lo[a]) lo[a] = v[a];
                 if (v[a] > hi[a]) hi[a] = v[a];
             }
@@ -628,6 +917,21 @@ static int c3d_load(C3d *c, const char *path, int wheelplace,
         if (!fb_ok) fb_bad++;
 
         if (g_mesh_mode == MESH_STRIP) {
+            /* the STRIP control has no per-triangle texture (it discards the
+             * face records by definition), so it gets one run per part with the
+             * name-matched texture -- and the log says so. */
+            if (c->nruns >= c->runcap) {
+                int nc = c->runcap ? c->runcap * 2 : 256;
+                DrawRun *nr = realloc(c->run, (size_t)nc * sizeof *nr);
+                if (!nr) { fprintf(stderr, "[ERR] out of memory (runs)\n"); return 0; }
+                c->run = nr; c->runcap = nc;
+            }
+            c->run[c->nruns].istart = (uint32_t)c->nidx;
+            c->run[c->nruns].icount = 0;
+            c->run[c->nruns].tex    = P->tex;
+            c->run[c->nruns].alpha  = P->transparent;
+            c->run[c->nruns].part   = i;
+            c->nruns++;
             for (int k = 0; k + 2 < nv; k++) {
                 if ((size_t)c->nidx + 3 > c->icap) break;
                 uint32_t a = P->vstart + (uint32_t)k;
@@ -636,6 +940,8 @@ static int c3d_load(C3d *c, const char *path, int wheelplace,
                 if (k & 1) { uint32_t t = a; a = b; b = t; }   /* keep winding */
                 c->idx[c->nidx++] = a; c->idx[c->nidx++] = b; c->idx[c->nidx++] = d;
             }
+            c->run[c->nruns - 1].icount = (uint32_t)c->nidx - c->run[c->nruns - 1].istart;
+            runsat[i] = c->nruns;
         } else {
             if (!P->F || !fb_ok) { fb_bad++; }
             else {
@@ -647,11 +953,45 @@ static int c3d_load(C3d *c, const char *path, int wheelplace,
                         ix[2] >= (uint16_t)nv) continue;
                     if (ix[0] == ix[1] || ix[1] == ix[2] || ix[0] == ix[2]) continue;
                     if ((size_t)c->nidx + 3 > c->icap) break;
+                    /* texture of this triangle: record+4, field_0x2c = 0.
+                     * -1 means "no texture" and is not a slot we can bind. */
+                    int t = (int)ru32(rec, TRI_TEXOFF);
+                    if (t < 0 || t >= MAXTEX) t = -1;
+                    /* a new run when the texture changes, exactly like
+                     * Game_DrawMeshTextureRuns / Graphics_DrawMeshTextureBatches */
+                    if (c->nruns == 0 || c->run[c->nruns - 1].tex != t ||
+                        c->run[c->nruns - 1].alpha != P->transparent) {
+                        if (c->nruns >= c->runcap) {
+                            int nc = c->runcap ? c->runcap * 2 : 256;
+                            DrawRun *nr = realloc(c->run, (size_t)nc * sizeof *nr);
+                            if (!nr) { fprintf(stderr, "[ERR] out of memory (runs)\n"); return 0; }
+                            c->run = nr; c->runcap = nc;
+                        }
+                        c->run[c->nruns].istart = (uint32_t)c->nidx;
+                        c->run[c->nruns].icount = 0;
+                        c->run[c->nruns].tex    = t;
+                        c->run[c->nruns].alpha  = P->transparent;
+                        c->run[c->nruns].part   = i;
+                        c->nruns++;
+                        texruns++;
+                    }
+                    c->run[c->nruns - 1].icount += 3;
+                    if (t >= 0) texcount[t]++;
                     c->idx[c->nidx++] = P->vstart + ix[0];
                     c->idx[c->nidx++] = P->vstart + ix[1];
                     c->idx[c->nidx++] = P->vstart + ix[2];
                 }
+                if (c->nruns > 0) runsat[i] = c->nruns;   /* end of this part's runs */
             }
+        }
+        if (getenv("PARTBOUNDS")) {
+            float l[3] = { 1e9f, 1e9f, 1e9f }, h[3] = { -1e9f, -1e9f, -1e9f };
+            for (uint32_t q2 = P->vstart; q2 < (uint32_t)c->nverts; q2++) {
+                const float *w = (const float *)(c->verts + (size_t)q2 * VSTRIDE);
+                for (int a = 0; a < 3; a++) { if (w[a] < l[a]) l[a] = w[a]; if (w[a] > h[a]) h[a] = w[a]; }
+            }
+            printf("[PB] %2d %-12s x[%.3f,%.3f] y[%.3f,%.3f] z[%.3f,%.3f]\n",
+                   i, P->name, l[0], h[0], l[1], h[1], l[2], h[2]);
         }
         P->built = (uint32_t)c->nidx - P->istart;
         if (!P->built) S.holes++;
@@ -696,12 +1036,31 @@ static int c3d_load(C3d *c, const char *path, int wheelplace,
     }
     free(edges);
 
+    printf("[M2] node placement %s: identity nodes moved at most %.6f m over %d vertices (%d over 1mm)\n",
+           nodeplace ? "ON" : "off", (double)idmove, c->nverts, nidbad);
+
     printf("[MESH] %-7s parts=%d verts=%d tris=%d  (vcap=%zu/%zu icap=%zu/%zu)\n",
            g_mesh_mode == MESH_STRIP ? "strip" : "indexed", c->nparts, c->nverts, c->ntri,
            (size_t)c->nverts, c->vcap, (size_t)c->nidx, c->icap);
     printf("[MESH] degenerate tris=%d  holes/empty parts=%d  bridging = %.2f%% "
            "(tris over 5x median edge)  median edge = %.4f of part diag\n",
            S.degenerate, S.holes, S.bridge_pct, S.median_edge_ratio);
+    /* texruns counts only the indexed path's runs; the strip path's per-part
+     * runs are not texture evidence, so they are not counted here. */
+    texruns = texruns > 0 ? texruns : 0;
+    {
+        int used = 0;
+        for (int t = 0; t < MAXTEX; t++) if (texcount[t]) used++;
+        printf("[TEXRUNS] %d runs from the file's own per-triangle texture IDs, "
+               "%d distinct textures bound", c->nruns, used);
+        if (g_mesh_mode == MESH_STRIP) printf("  (STRIP path: name-matched, one run per part)");
+        printf("\n");
+        printf("[TEXRUNS]");
+        for (int t = 0; t < c->ntex; t++)
+            if (texcount[t]) printf("  %d:%s x%d", t, c->texname[t], texcount[t]);
+        printf("\n");
+        (void)texruns; (void)texruns_before; (void)runsat;
+    }
     if (truncated) printf("[MESH] WARN %d part(s) had to be clamped to the vertex budget\n", truncated);
     if (fb_bad)    printf("[MESH] WARN %d part(s) had an unusable face block\n", fb_bad);
     return c->nverts > 0;
@@ -746,11 +1105,14 @@ int main(int argc, char **argv) {
             printf(
 "cmr2deck [car] [--game DIR] [--shot FILE] [--list]\n"
 "          [--mesh indexed|strip]\n"
-"  Native CMR2 car viewer. Reads the game's own .c3d geometry and .bfl DXT5\n"
+"  Native CMR2 car viewer. Reads the game's own .c3d geometry and .bfl\n"
+"  DDS(DXT5) / TGA textures and renders them on the Deck's GPU via SDL3.\n"
 "  textures and renders them on the Deck's GPU via SDL3/Vulkan.\n"
 "  controls: arrows orbit | A/D yaw | W wireframe | Q/S zoom | SPACE spin\n"
 "            R reset | wheel zoom | ESC quit\n"
-"  env:      CMR2_GAME, WX/WY/WZ wheel offset, NOWHEELPLACE=1, SPIN=1\n"
+"  env:      CMR2_GAME, SPIN=1, MESH=indexed|strip\n"
+"            NODEPLACE=0 no placed transforms | NOWHEELPLACE=1 no wheels\n"
+"            WX/WY/WZ override the wheel offset        | TEXDUMP=DIR\n"
 "            MESH=indexed|strip (same as --mesh)\n");
             return 0;
         }
@@ -810,13 +1172,16 @@ int main(int argc, char **argv) {
     }
 
     int wheelplace = getenv("NOWHEELPLACE") ? 0 : 1;
+    /* M2: place parts from the .c3d's own scene nodes. NODEPLACE=0 reverts to
+     * the mirrored-corner inference for an A/B against the same render. */
+    int nodeplace  = (!getenv("NOWHEELPLACE") && !getenv("NODEPLACE")) ? 1 : 0;
     float wx = 1.20f, wy = -0.23f, wz = 0.75f;
     const char *e;
     if ((e = getenv("WX"))) wx = (float)atof(e);
     if ((e = getenv("WY"))) wy = (float)atof(e);
     if ((e = getenv("WZ"))) wz = (float)atof(e);
     /* fixed camera, so two runs can be compared pixel for pixel */
-    float yaw0 = 38.0f, elev0 = 16.0f, distk = 1.55f;
+    float yaw0 = 38.0f, elev0 = 14.0f, distk = 1.30f;
     if ((e = getenv("YAW")))  yaw0  = (float)atof(e);
     if ((e = getenv("ELEV"))) elev0 = (float)atof(e);
     if ((e = getenv("DIST"))) distk = (float)atof(e);
@@ -826,7 +1191,7 @@ int main(int argc, char **argv) {
     printf("[INFO] c3d  %s\n", c3dpath);
 
     C3d c;
-    if (!c3d_load(&c, c3dpath, wheelplace, wx, wy, wz)) return 1;
+    if (!c3d_load(&c, c3dpath, wheelplace, nodeplace, wx, wy, wz)) return 1;
     /* was: 100.0 * nidx / 3.0 -- the denominator was a constant, so the
      * "percentage of face records kept" printed 88800.0%. It is triangles
      * loaded / face records in the file, and it is the fastest way to see the
@@ -856,6 +1221,47 @@ int main(int argc, char **argv) {
     int tw[MAXTEX], th[MAXTEX], got[MAXTEX];
     memset(tex, 0, sizeof tex); memset(got, 0, sizeof got);
 
+
+    /* ---- presentation config. EVERY value below is printed before the first
+     * frame, because none of it is game data and a frame that hides its own
+     * shading model is a frame that can be mistaken for a render of the game.
+     * The alpha states and the blend pair ARE the game's; the ambient value and
+     * the light direction are not -- CMR2's object light is a stage light. */
+    /* MSAA count -> SDL_GPUSampleCount. The enum is NOT the number of samples
+     * (SDL_GPU_SAMPLECOUNT_1 == 0), and casting 4 to it asks for 8x, which the
+     * backend rejects -- that cost a core dump to find. */
+    int   msaa   = getenv("MSAA") ? atoi(getenv("MSAA")) : 4;
+    SDL_GPUSampleCount scount = SDL_GPU_SAMPLECOUNT_1;
+    if      (msaa == 2) scount = SDL_GPU_SAMPLECOUNT_2;
+    else if (msaa == 4) scount = SDL_GPU_SAMPLECOUNT_4;
+    else if (msaa == 8) scount = SDL_GPU_SAMPLECOUNT_8;
+    else msaa = 1;
+    const char *cullenv = getenv("CULL");
+    SDL_GPUCullMode cull = SDL_GPU_CULLMODE_BACK;
+    if (cullenv) {
+        if      (!strcmp(cullenv, "none"))  cull = SDL_GPU_CULLMODE_NONE;
+        else if (!strcmp(cullenv, "back"))  cull = SDL_GPU_CULLMODE_BACK;
+        else if (!strcmp(cullenv, "front")) cull = SDL_GPU_CULLMODE_FRONT;
+        else { fprintf(stderr, "[ERR] CULL takes none|back|front\n"); return 2; }
+    }
+    float ambient = getenv("AMB")  ? (float)atof(getenv("AMB"))  : 0.40f;
+    float gain    = getenv("GAIN") ? (float)atof(getenv("GAIN")) : 0.55f;
+    float fillg   = getenv("FILL") ? (float)atof(getenv("FILL")) : 0.36f;
+    float ldir[3] = { -0.42f, 0.72f, 0.55f };
+    float ldir2[3] = { 0.62f, 0.28f, -0.60f };
+    if (getenv("LDIR"))  sscanf(getenv("LDIR"),  "%f,%f,%f", &ldir[0],  &ldir[1],  &ldir[2]);
+    if (getenv("LDIR2")) sscanf(getenv("LDIR2"), "%f,%f,%f", &ldir2[0], &ldir2[1], &ldir2[2]);
+    float *nrm2[2] = { ldir, ldir2 };
+    for (int q = 0; q < 2; q++) {
+        float l = sqrtf(nrm2[q][0]*nrm2[q][0] + nrm2[q][1]*nrm2[q][1] + nrm2[q][2]*nrm2[q][2]);
+        if (l < 1e-6f) { nrm2[q][0] = 0; nrm2[q][1] = 1; nrm2[q][2] = 0; l = 1; }
+        nrm2[q][0] /= l; nrm2[q][1] /= l; nrm2[q][2] /= l;
+    }
+    int   shadow  = getenv("SHADOW") ? (atoi(getenv("SHADOW")) != 0) : 1;
+    int   vshade  = getenv("VSHADE") ? 1 : 0;   /* vertex colour as diffuse term */
+    int   use_bg  = getenv("BG") ? (atoi(getenv("BG")) != 0) : 1;
+    float alpharef_alpha = 1.0f / 255.0f;       /* ALPHAREF 1   + D3DCMP_GREATER */
+    float alpharef_solid = 128.0f / 255.0f;     /* ALPHAREF 128 + D3DCMP_GREATER */
     /* ---- SDL / GPU ---- */
     int headless = (shot != NULL);
     if (headless) SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "offscreen");
@@ -866,6 +1272,14 @@ int main(int argc, char **argv) {
     printf("[OK] GPU device: %s\n", SDL_GetGPUDeviceDriver(dev));
 
     int W = 1280, H = 720;
+    /* the Deck's own panel is 1280x800; OFFW/OFFH so a shot can be taken at it */
+    if (headless) {
+        const char *ow = getenv("OFFW"), *oh = getenv("OFFH");
+        if (ow) W = atoi(ow);
+        if (oh) H = atoi(oh);
+        if (W < 64) W = 64; if (H < 64) H = 64;
+        if (W > 4096) W = 4096; if (H > 4096) H = 4096;
+    }
     SDL_Window *win = NULL;
     if (!headless) {
         Uint32 wflags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE;
@@ -886,7 +1300,10 @@ int main(int argc, char **argv) {
             printf("[OK] window + swapchain, video driver = %s\n", SDL_GetCurrentVideoDriver());
         }
     }
-    SDL_GPUTexture *color = NULL;
+    /* ---- render targets. MSAA is mine: the game rendered into a plain 32-bit
+     * surface, so this is presentation, not fidelity -- it is printed as such. */
+    int samples = msaa;
+    SDL_GPUTexture *color = NULL, *color_ms = NULL;
     if (!win) {
         SDL_GPUTextureCreateInfo ci = {0};
         ci.type = SDL_GPU_TEXTURETYPE_2D;
@@ -899,7 +1316,25 @@ int main(int argc, char **argv) {
     SDL_GPUTexture *depth = SDL_CreateGPUTexture(dev, &(SDL_GPUTextureCreateInfo){
         .type = SDL_GPU_TEXTURETYPE_2D, .format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT,
         .width = W, .height = H, .layer_count_or_depth = 1, .num_levels = 1,
-        .usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET });
+        .usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET, .sample_count = scount });
+    if (samples > 1) {
+        SDL_GPUTextureCreateInfo ci = {0};
+        ci.type = SDL_GPU_TEXTURETYPE_2D;
+        ci.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+        ci.width = W; ci.height = H; ci.layer_count_or_depth = 1; ci.num_levels = 1;
+        ci.sample_count = scount;
+        ci.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+        color_ms = SDL_CreateGPUTexture(dev, &ci);
+    }
+    printf("[CFG] samples=%d cull=%s ambient=%.2f key=%.2f fill=%.2f "
+           "light=(%.2f,%.2f,%.2f) fill_dir=(%.2f,%.2f,%.2f) vshade=%d backdrop=%d "
+           "castshadow=%d\n   (the ambient, both lights, the shadow, the backdrop and the "
+           "framing are MINE. The alpha test, the alpha ref 0x80/1, the "
+           "SRCALPHA/INVSRCALPHA blend pair and every texture/vertex/triangle are the "
+           "game's)\n",
+           samples, cullenv ? cullenv : "back", ambient, gain, fillg,
+           ldir[0], ldir[1], ldir[2], ldir2[0], ldir2[1], ldir2[2],
+           vshade, use_bg, shadow);
 
     SDL_GPUSampler *samp = SDL_CreateGPUSampler(dev, &(SDL_GPUSamplerCreateInfo){
         .min_filter = SDL_GPU_FILTER_LINEAR, .mag_filter = SDL_GPU_FILTER_LINEAR,
@@ -916,7 +1351,7 @@ int main(int argc, char **argv) {
         uint8_t *rgba = NULL;
         size_t dl = 0;
         const uint8_t *blob = have_bfl ? bfl_find(&B, bfl, c.texname[i], &dl) : NULL;
-        if (blob) rgba = dds_decode(blob, dl, &w0, &h0);
+        if (blob) rgba = tex_decode(blob, dl, &w0, &h0);
         if (rgba) nloaded++;
         else {
             nmissing++;
@@ -926,6 +1361,19 @@ int main(int argc, char **argv) {
             else       printf("[WARN] tex[%2d] %-14s undecodable -> flat white\n", i, c.texname[i]);
         }
         tw[i] = w0; th[i] = h0; got[i] = rgba ? 1 : 0;
+        /* TEXDUMP=DIR writes every decoded texture out as PPM (P6) so a decode
+         * can be diffed against an independent reader instead of eyeballed. */
+        { const char *td = getenv("TEXDUMP");
+          if (td) {
+            char fp[1600];
+            snprintf(fp, sizeof fp, "%s/%02d_%s.ppm", td, i, c.texname[i]);
+            FILE *o = fopen(fp, "wb");
+            if (o) {
+                fprintf(o, "P6\n%d %d\n255\n", w0, h0);
+                for (int q = 0; q < w0 * h0; q++) fwrite(rgba + q * 4, 1, 3, o);
+                fclose(o);
+            }
+          } }
         SDL_GPUTextureCreateInfo tci = {0};
         tci.type = SDL_GPU_TEXTURETYPE_2D;
         tci.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
@@ -951,20 +1399,26 @@ int main(int argc, char **argv) {
     /* ---- shaders ---- */
     const char *sbase = SDL_GetBasePath();
     char sp[1500];
-    size_t vsz = 0, fsz = 0;
-    snprintf(sp, sizeof sp, "%s%s", sbase ? sbase : "./", "car.vert.spv");
-    void *vs = SDL_LoadFile(sp, &vsz);
-    snprintf(sp, sizeof sp, "%s%s", sbase ? sbase : "./", "car.frag.spv");
-    void *fs = SDL_LoadFile(sp, &fsz);
-    if (!vs || !fs) { fprintf(stderr, "[ERR] shaders (car.vert.spv/car.frag.spv) not next to the binary\n"); return 1; }
+    void *sblob[4] = {0}; size_t sblen[4] = {0};
+    const char *sfn[4] = { "car.vert.spv", "car.frag.spv", "bg.vert.spv", "bg.frag.spv" };
+    for (int i = 0; i < 4; i++) {
+        snprintf(sp, sizeof sp, "%s%s", sbase ? sbase : "./", sfn[i]);
+        sblob[i] = SDL_LoadFile(sp, &sblen[i]);
+        if (!sblob[i]) {
+            /* the backdrop is optional: without it the clear colour is used */
+            if (i < 2) { fprintf(stderr, "[ERR] shader %s not next to the binary\n", sfn[i]); return 1; }
+            if (use_bg) printf("[WARN] %s missing -- backdrop off\n", sfn[i]);
+            use_bg = 0;
+        }
+    }
     SDL_GPUShader *vsh = SDL_CreateGPUShader(dev, &(SDL_GPUShaderCreateInfo){
-        .code_size = vsz, .code = vs, .entrypoint = "main",
+        .code_size = sblen[0], .code = sblob[0], .entrypoint = "main",
         .format = SDL_GPU_SHADERFORMAT_SPIRV, .stage = SDL_GPU_SHADERSTAGE_VERTEX,
         .num_uniform_buffers = 1 });
     SDL_GPUShader *fsh = SDL_CreateGPUShader(dev, &(SDL_GPUShaderCreateInfo){
-        .code_size = fsz, .code = fs, .entrypoint = "main",
+        .code_size = sblen[1], .code = sblob[1], .entrypoint = "main",
         .format = SDL_GPU_SHADERFORMAT_SPIRV, .stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
-        .num_samplers = 1 });
+        .num_samplers = 1, .num_uniform_buffers = 1 });
     if (!vsh || !fsh) { fprintf(stderr, "[ERR] shader: %s\n", SDL_GetError()); return 1; }
 
     SDL_GPUVertexBufferDescription vbd = { .slot = 0, .pitch = VSTRIDE,
@@ -975,11 +1429,12 @@ int main(int argc, char **argv) {
         { .location = 2, .buffer_slot = 0, .format = SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM, .offset = 24 },
         { .location = 3, .buffer_slot = 0, .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,      .offset = 28 },
     };
-    SDL_GPUGraphicsPipeline *pipe[2][2];
+    SDL_GPUGraphicsPipeline *pipe[2][2], *bgpipe = NULL;
     for (int tp = 0; tp < 2; tp++) {
         for (int wf = 0; wf < 2; wf++) {
             SDL_GPUColorTargetBlendState blend = {0};
             if (tp) {
+                /* the game's pair: D3DBLEND_SRCALPHA / D3DBLEND_INVSRCALPHA */
                 blend.enable_blend = true;
                 blend.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
                 blend.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
@@ -1001,7 +1456,8 @@ int main(int argc, char **argv) {
             pci.vertex_input_state.num_vertex_attributes = 4;
             pci.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
             pci.rasterizer_state.fill_mode = wf ? SDL_GPU_FILLMODE_LINE : SDL_GPU_FILLMODE_FILL;
-            pci.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+            pci.rasterizer_state.cull_mode = cull;
+            pci.multisample_state.sample_count = scount;
             pci.depth_stencil_state.enable_depth_test = true;
             pci.depth_stencil_state.enable_depth_write = !tp;
             pci.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS;
@@ -1013,8 +1469,76 @@ int main(int argc, char **argv) {
             if (!pipe[tp][wf]) { fprintf(stderr, "[ERR] pipeline: %s\n", SDL_GetError()); return 1; }
         }
     }
+    /* the ground shadow: the same vertices, darkened into the backdrop
+     * (dst * (1 - src.a)), no depth, no cull, no wireframe variant */
+    SDL_GPUGraphicsPipeline *shpipe = NULL;
+    if (shadow) {
+        SDL_GPUColorTargetBlendState sb = {0};
+        sb.enable_blend = true;
+        sb.src_color_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
+        sb.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+        sb.color_blend_op = SDL_GPU_BLENDOP_ADD;
+        sb.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
+        sb.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+        sb.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
+        SDL_GPUColorTargetDescription ctd = { .format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+                                              .blend_state = sb };
+        /* the shadow needs its own fragment stage: the car's fragment shader
+         * takes a sampler, and a pipeline with a sampler must have one bound at
+         * every draw or SDL aborts ("Missing fragment sampler binding!"). */
+        snprintf(sp, sizeof sp, "%s%s", sbase ? sbase : "./", "shadow.frag.spv");
+        size_t shsz = 0;
+        void *shblob = SDL_LoadFile(sp, &shsz);
+        if (!shblob) { fprintf(stderr, "[ERR] shadow.frag.spv not next to the binary\n"); return 1; }
+        SDL_GPUShader *sfsh = SDL_CreateGPUShader(dev, &(SDL_GPUShaderCreateInfo){
+            .code_size = shsz, .code = shblob, .entrypoint = "main",
+            .format = SDL_GPU_SHADERFORMAT_SPIRV, .stage = SDL_GPU_SHADERSTAGE_FRAGMENT });
+        if (!sfsh) { fprintf(stderr, "[ERR] shadow fragment shader: %s\n", SDL_GetError()); return 1; }
+        SDL_GPUGraphicsPipelineCreateInfo pci = {0};
+        pci.vertex_shader = vsh;
+        pci.fragment_shader = sfsh;
+        pci.vertex_input_state.vertex_buffer_descriptions = &vbd;
+        pci.vertex_input_state.num_vertex_buffers = 1;
+        pci.vertex_input_state.vertex_attributes = attrs;
+        pci.vertex_input_state.num_vertex_attributes = 4;
+        pci.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+        pci.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+        pci.multisample_state.sample_count = scount;
+        pci.depth_stencil_state.enable_depth_test = false;
+        pci.depth_stencil_state.enable_depth_write = false;
+        pci.target_info.color_target_descriptions = &ctd;
+        pci.target_info.num_color_targets = 1;
+        pci.target_info.depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT;
+        pci.target_info.has_depth_stencil_target = true;
+        shpipe = SDL_CreateGPUGraphicsPipeline(dev, &pci);
+        if (!shpipe) { fprintf(stderr, "[ERR] shadow pipeline: %s\n", SDL_GetError()); return 1; }
+    }
+    if (use_bg) {
+        SDL_GPUShader *bv = SDL_CreateGPUShader(dev, &(SDL_GPUShaderCreateInfo){
+            .code_size = sblen[2], .code = sblob[2], .entrypoint = "main",
+            .format = SDL_GPU_SHADERFORMAT_SPIRV, .stage = SDL_GPU_SHADERSTAGE_VERTEX });
+        SDL_GPUShader *bf = SDL_CreateGPUShader(dev, &(SDL_GPUShaderCreateInfo){
+            .code_size = sblen[3], .code = sblob[3], .entrypoint = "main",
+            .format = SDL_GPU_SHADERFORMAT_SPIRV, .stage = SDL_GPU_SHADERSTAGE_FRAGMENT });
+        if (!bv || !bf) { fprintf(stderr, "[ERR] backdrop shader: %s\n", SDL_GetError()); return 1; }
+        SDL_GPUColorTargetDescription ctd = { .format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM, .blend_state = {0} };
+        SDL_GPUGraphicsPipelineCreateInfo pci = {0};
+        pci.vertex_shader = bv;
+        pci.fragment_shader = bf;
+        pci.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+        pci.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+        pci.multisample_state.sample_count = scount;
+        pci.depth_stencil_state.enable_depth_test = false;
+        pci.depth_stencil_state.enable_depth_write = false;
+        pci.target_info.color_target_descriptions = &ctd;
+        pci.target_info.num_color_targets = 1;
+        pci.target_info.depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT;
+        pci.target_info.has_depth_stencil_target = true;
+        bgpipe = SDL_CreateGPUGraphicsPipeline(dev, &pci);
+        if (!bgpipe) { fprintf(stderr, "[ERR] backdrop pipeline: %s\n", SDL_GetError()); return 1; }
+    }
 
-    /* ---- geometry upload ---- */
+
     Uint32 vbsz = (Uint32)c.nverts * VSTRIDE, ibsz = (Uint32)c.nidx * 4;
     SDL_GPUBuffer *vb = SDL_CreateGPUBuffer(dev, &(SDL_GPUBufferCreateInfo){
         .usage = SDL_GPU_BUFFERUSAGE_VERTEX, .size = vbsz });
@@ -1122,15 +1646,34 @@ int main(int argc, char **argv) {
 
         SDL_GPUCommandBuffer *cmd = SDL_AcquireGPUCommandBuffer(dev);
         if (!cmd) break;
-        SDL_GPUTexture *tgt = color;
+        SDL_GPUTexture *sw = NULL;
         if (win) {
-            if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmd, win, &tgt, NULL, NULL)) {
+            if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmd, win, &sw, NULL, NULL)) {
                 fprintf(stderr, "[ERR] swapchain: %s\n", SDL_GetError());
                 SDL_SubmitGPUCommandBuffer(cmd);
                 break;
             }
-            if (!tgt) { SDL_SubmitGPUCommandBuffer(cmd); continue; }
-            SDL_GetWindowSizeInPixels(win, &W, &H);
+            if (!sw) { SDL_SubmitGPUCommandBuffer(cmd); continue; }
+            /* a resize invalidates the MSAA and depth textures */
+            Uint32 nw = 0, nh = 0;
+            SDL_GetWindowSizeInPixels(win, &nw, &nh);
+            if ((int)nw != W || (int)nh != H) {
+                W = (int)nw; H = (int)nh;
+                SDL_ReleaseGPUTexture(dev, depth);
+                depth = SDL_CreateGPUTexture(dev, &(SDL_GPUTextureCreateInfo){
+                    .type = SDL_GPU_TEXTURETYPE_2D, .format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT,
+                    .width = W, .height = H, .layer_count_or_depth = 1, .num_levels = 1,
+                    .usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET,
+                    .sample_count = scount });
+                if (color_ms) {
+                    SDL_ReleaseGPUTexture(dev, color_ms);
+                    color_ms = SDL_CreateGPUTexture(dev, &(SDL_GPUTextureCreateInfo){
+                        .type = SDL_GPU_TEXTURETYPE_2D, .format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+                        .width = W, .height = H, .layer_count_or_depth = 1, .num_levels = 1,
+                        .sample_count = (SDL_GPUSampleCount)samples,
+                        .usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET });
+                }
+            }
         }
 
         float rad = yaw * 3.14159265f / 180.0f, er = elev * 3.14159265f / 180.0f;
@@ -1165,39 +1708,109 @@ int main(int argc, char **argv) {
                 for (int k = 0; k < 4; k++) s += proj[k * 4 + rr] * view[cc * 4 + k];
                 mvp[cc * 4 + rr] = s;
             }
-        float ubo[24];
+        /* ---- the ground shadow matrix: the same geometry, flattened onto
+         * y = 0 along the key light. Affine, so it composes into the MVP and
+         * the car's own vertex shader can draw it. ---- */
+        /* column-major, so S[col*4 + row] with column vector (x,y,z,1):
+         *   x' = x - Lx*y      y' = ybase      z' = z - Lz*y      w' = 1
+         * which is the exact point where the ray from a vertex along the key
+         * light direction meets the plane y = ybase. */
+        float Lx = 0.0f, Lz = 0.0f, ybase = c.lo[1] - 0.012f;
+        float S[16] = { 0 };
+        if (shadow) {
+            float ly = ldir[1] > 0.15f ? ldir[1] : 0.15f;
+            Lx = ldir[0] / ly; Lz = ldir[2] / ly;
+        }
+        S[0] = 1.0f; S[4] = -Lx; S[10] = 1.0f; S[6] = -Lz; S[13] = ybase;
+        S[15] = 1.0f;
+        float smvp[16];
+        for (int cc = 0; cc < 4; cc++)
+            for (int rr = 0; rr < 4; rr++) {
+                float s = 0;
+                for (int k = 0; k < 4; k++) s += mvp[k * 4 + rr] * S[cc * 4 + k];
+                smvp[cc * 4 + rr] = s;
+            }
+        float ubo[32];   /* mvp, light, light2, eye, params */
         memcpy(ubo, mvp, 64);
-        ubo[16] = -0.45f; ubo[17] = 0.85f; ubo[18] = 0.62f; ubo[19] = 0.0f;
-        ubo[20] = ex; ubo[21] = ey; ubo[22] = ez; ubo[23] = 0.0f;
+        ubo[16] = ldir[0]; ubo[17] = ldir[1]; ubo[18] = ldir[2]; ubo[19] = gain;
+        ubo[20] = ldir2[0]; ubo[21] = ldir2[1]; ubo[22] = ldir2[2]; ubo[23] = fillg;
+        ubo[24] = ex; ubo[25] = ey; ubo[26] = ez; ubo[27] = 0.0f;
+        ubo[28] = ambient; ubo[29] = 1.0f;
+        ubo[30] = alpharef_solid; ubo[31] = vshade ? 1.0f : 0.0f;
 
+        /* ---- render pass. The MSAA texture is where the car is drawn; the
+         * plain texture (or the swapchain) is the resolve target. ---- */
+        SDL_GPUTexture *tgt = color_ms ? color_ms : (win ? sw : color);
+        SDL_GPUTexture *res = color_ms ? (win ? sw : color) : NULL;
         SDL_GPUColorTargetInfo ct = {0};
         ct.texture = tgt;
         ct.load_op = SDL_GPU_LOADOP_CLEAR;
-        ct.store_op = SDL_GPU_STOREOP_STORE;
+        ct.store_op = res ? SDL_GPU_STOREOP_RESOLVE : SDL_GPU_STOREOP_STORE;
         ct.clear_color = (SDL_FColor){ 0.055f, 0.06f, 0.075f, 1.0f };
+        if (res) ct.resolve_texture = res;
         SDL_GPUDepthStencilTargetInfo dti = {0};
         dti.texture = depth;
         dti.clear_depth = 1.0f;
         dti.load_op = SDL_GPU_LOADOP_CLEAR;
         dti.store_op = SDL_GPU_STOREOP_DONT_CARE;
         SDL_GPURenderPass *rp = SDL_BeginGPURenderPass(cmd, &ct, 1, &dti);
+
+        /* the backdrop first, depth off: mine, see the frame note */
+        if (bgpipe) {
+            SDL_BindGPUGraphicsPipeline(rp, bgpipe);
+            SDL_DrawGPUPrimitives(rp, 3, 1, 0, 0);
+        }
+
         SDL_BindGPUVertexBuffers(rp, 0, &(SDL_GPUBufferBinding){ .buffer = vb, .offset = 0 }, 1);
         SDL_BindGPUIndexBuffer(rp, &(SDL_GPUBufferBinding){ .buffer = ib, .offset = 0 },
                                SDL_GPU_INDEXELEMENTSIZE_32BIT);
         SDL_PushGPUVertexUniformData(cmd, 0, ubo, sizeof ubo);
 
-        int drawn = 0;
+        int shadow_draws = 0;
+        int nocar = getenv("NOCAR") ? 1 : 0;
+        int drawn = 0, skipped = 0;
+        /* ---- the ground shadow, then the car ------------------------------ */
+        if (shpipe && !nocar) {
+            float subo[32];
+            memcpy(subo, ubo, sizeof subo);
+            memcpy(subo, smvp, 64);
+            subo[31] = 2.0f;                       /* shadow mode */
+            SDL_BindGPUGraphicsPipeline(rp, shpipe);
+            SDL_PushGPUVertexUniformData(cmd, 0, subo, sizeof subo);
+            SDL_PushGPUFragmentUniformData(cmd, 0, subo, sizeof subo);
+            for (int r = 0; r < c.nruns; r++) {
+                DrawRun *R = &c.run[r];
+                if (!R->icount || R->alpha) continue;   /* glass casts no shadow */
+                if (R->tex < 0 || R->tex >= NT || !tex[R->tex]) continue;
+                SDL_DrawGPUIndexedPrimitives(rp, R->icount, 1, R->istart, 0, 0);
+                shadow_draws++;
+            }
+            /* the shadow's MVP is a push uniform: without this the car draws
+             * itself flattened onto the floor and vanishes. That is exactly what
+             * happened on the first run of this pass. */
+            SDL_PushGPUVertexUniformData(cmd, 0, ubo, sizeof ubo);
+        }
         for (int pass = 0; pass < 2; pass++) {
+            /* ALPHAREF, from Graphics_SwitchAlphaBlendAndTest: 1 while blending,
+             * 0x80 while not, with ALPHAFUNC = D3DCMP_GREATER either way. */
+            ubo[28] = ambient; ubo[29] = 1.0f;
+            ubo[30] = pass ? alpharef_alpha : alpharef_solid;
+            ubo[31] = vshade ? 1.0f : 0.0f;
+            SDL_PushGPUFragmentUniformData(cmd, 0, ubo, sizeof ubo);
             SDL_BindGPUGraphicsPipeline(rp, pipe[pass][wire]);
-            for (int i = 0; i < c.nparts; i++) {
-                C3dPart *P = &c.part[i];
-                if (!P->built) continue;
-                if (!!P->transparent != pass) continue;
-                int ti = P->tex;
-                if (ti < 0 || ti >= NT || !tex[ti]) continue;
-                SDL_GPUTextureSamplerBinding b = { .texture = tex[ti], .sampler = samp };
-                SDL_BindGPUFragmentSamplers(rp, 0, &b, 1);
-                SDL_DrawGPUIndexedPrimitives(rp, P->built, 1, P->istart, 0, 0);
+            int bound = -2;
+            for (int r = 0; r < c.nruns; r++) {
+                DrawRun *R = &c.run[r];
+                if (!R->icount || nocar) continue;
+                if (!!R->alpha != pass) continue;
+                int ti = R->tex;
+                if (ti < 0 || ti >= NT || !tex[ti]) { skipped++; continue; }
+                if (ti != bound) {          /* bind only on a real change */
+                    SDL_GPUTextureSamplerBinding b = { .texture = tex[ti], .sampler = samp };
+                    SDL_BindGPUFragmentSamplers(rp, 0, &b, 1);
+                    bound = ti;
+                }
+                SDL_DrawGPUIndexedPrimitives(rp, R->icount, 1, R->istart, 0, 0);
                 drawn++;
             }
         }
@@ -1254,8 +1867,9 @@ int main(int argc, char **argv) {
                 /* background is (0.055,0.06,0.075) -> ~14,15,19 in 8 bit */
                 if (p8[i * 4] > 24 || p8[i * 4 + 1] > 24 || p8[i * 4 + 2] > 28) lit++;
             }
-            printf("[OK] %d part draws, %d/%d pixels lit (%.1f%%)\n",
-                   drawn, lit, total, 100.0 * lit / total);
+            printf("[OK] %d shadow draws, %d texture-run draws (%d runs refused: no texture), "
+                   "%d/%d pixels lit (%.1f%%)\n",
+                   shadow_draws, drawn, skipped, lit, total, 100.0 * lit / total);
             SDL_UnmapGPUTransferBuffer(dev, dtb);
             SDL_ReleaseGPUTransferBuffer(dev, dtb);
             running = 0;
@@ -1275,6 +1889,7 @@ int main(int argc, char **argv) {
         }
     }
 
+    free(c.run);
     if (win) { SDL_ReleaseWindowFromGPUDevice(dev, win); SDL_DestroyWindow(win); }
     SDL_DestroyGPUDevice(dev);
     SDL_Quit();
