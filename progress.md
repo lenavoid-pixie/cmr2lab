@@ -25,7 +25,7 @@ Paths, so they line up on both ends:
 |---|---|
 | the install | `~/lena/.lena_cmr2/game` (2.26 GB retail PC install; 259 `.c3d`, 220 car containers) |
 
-## 0a. THE MIRRORED FLANK — CLOSED. added 2026-10-10 18:27 EEST (commit `49d45ad`; the block below first said 18:35, which is later than the commit that carried it — corrected in the re-verification pass)
+## 0a. THE MIRRORED FLANK — CLOSED. added 2026-10-10 18:27 EEST (commit `51890a4` — `49d45ad` before the rebase onto `origin/main`; the block below first said 18:35, which is later than the commit that carried it — corrected in the re-verification pass)
 
 **Question, from the phone, and nobody else's queue:** in the 4-car frame and the
 single 205 frame the decals on one flank read correctly and the lettering on the
