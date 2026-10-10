@@ -395,6 +395,7 @@ typedef struct {
     uint32_t *idx;   int nidx;
     size_t   vcap, icap;             /* hard capacities -- never write past */
     int      ntri;
+    long     cfile_faces;            /* face records in the file (c20) */
     float    lo[3], hi[3];
     int      ntex;
     char     texname[MAXTEX][32];
@@ -543,6 +544,7 @@ static int c3d_load(C3d *c, const char *path, int wheelplace,
         totv += (long)ru32(r, MESH_VCOUNT);
         totf += (long)ru32(r, MESH_TCOUNT);
     }
+    c->cfile_faces = totf;
     c->vcap = (size_t)totv + 8;
     /* INDEXED needs 3*sum(F).  STRIP needs 3*sum(V-2), which is LARGER on every
      * file we have (+46% overall).  Budget for whichever is bigger, or the strip
@@ -825,9 +827,13 @@ int main(int argc, char **argv) {
 
     C3d c;
     if (!c3d_load(&c, c3dpath, wheelplace, wx, wy, wz)) return 1;
-    printf("[OK] geometry: %d parts, %d verts, %d indices (%.1f%% of face records kept)\n",
-           c.nparts, c.nverts, c.nidx,
-           c.nparts ? 100.0 * c.nidx / (3.0 * (c.nparts ? 1 : 1)) : 0.0);
+    /* was: 100.0 * nidx / 3.0 -- the denominator was a constant, so the
+     * "percentage of face records kept" printed 88800.0%. It is triangles
+     * loaded / face records in the file, and it is the fastest way to see the
+     * strip reading overrun by 32%: >100% means more triangles than the file has. */
+    printf("[OK] geometry: %d parts, %d verts, %d indices (%d of %ld face records kept = %.1f%%)\n",
+           c.nparts, c.nverts, c.nidx, c.ntri, c.cfile_faces,
+           c.cfile_faces ? 100.0 * (double)c.ntri / (double)c.cfile_faces : 0.0);
     printf("[INFO] bbox x[%.3f,%.3f] y[%.3f,%.3f] z[%.3f,%.3f] = %.2f x %.2f x %.2f m\n",
            c.lo[0], c.hi[0], c.lo[1], c.hi[1], c.lo[2], c.hi[2],
            c.hi[0] - c.lo[0], c.hi[1] - c.lo[1], c.hi[2] - c.lo[2]);
