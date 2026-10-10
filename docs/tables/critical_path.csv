@@ -1,0 +1,8 @@
+function,location,win32_calls_static,calls_not_decompiled
+WinMain,main.cpp:46,GetModuleHandleA*1,Initialize
+CMain::Initialize,main.cpp:51,ShowCursor*2 FindWindowA*1 PeekMessageA*1 GetMessageA*1 TranslateMessage*1 DispatchMessageA*1,LogToFile OpenLogFile RegisterNetworkResourceRelease CreateGameWindow UpdateActiveSoundSlots DispatchFrontendResourceState UnwindGameCallbacks CloseLogFile
+CMain::CreateGameWindow,main.cpp:136,GetSystemMetrics*2 ShowWindow*2 LoadIconA*1 GetStockObject*1 LoadCursorA*1 RegisterClassA*1 CreateWindowExA*1 UpdateWindow*1 SetFocus*1,RegisterCallback
+CMain::MessageHandler,main.cpp:185,PostQuitMessage*2 DefWindowProcA*1,SetGameActiveState StopSharedMusicBuffer NoOpSoundDeviceCallback RestoreSurfaces QueueVirtualKeyPress QueueInputCharacter RegisterWindowMessageA
+CGame::InitializeGame,Game.cpp:954,,GetValueFromKey SetGameRegion SetClearColour SetSecondaryOptionStateByte SetGameModeOptionBit19 PromoteCallbackEntryByRule GetConfiguredGameMode SetShouldExit GetConfigurationStateByte ConsumeOptionRefreshRequest ApplyStageOptionUnlockFlags SetInputAndGamePaused
+CGame::RunStateRenderCallbacks,Game.cpp:1146,,
+Game_DrawSceneViewport,Game.cpp:2580,,SetCullMode SetCachedSourceDestinationBlend GetSectorDrawState SetProjection FIX_NORMALIZE_INTO SetZWriteEnable SetZEnable

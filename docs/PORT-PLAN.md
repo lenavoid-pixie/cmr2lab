@@ -277,3 +277,63 @@ these was reported before it had been run.
 | textures 0/27, TOC | 44 of 220 containers are DDS and parse; 176 are TGA and are rejected | read the scorer, not the symptom |
 | bridging 0.00% vs 0.68% | 0.00% for **both** readings | re-ran it; **withdrawn** |
 | "strip invents 1,176" | strip *yields* 1,176 — 288 more than the file's 888 | arithmetic, then the viewer printed `132.4%` |
+
+---
+
+## 8. The dependency map — added after this plan was written
+
+Every number above is a **surface census**: how many sites mention a symbol. None
+of them is a **dependency graph**: who calls what, in what order, and what stops
+if a piece is absent. The shim was therefore being built in *compiler-error
+order* — the order the compiler happened to complain in.
+
+Two artifacts fix that, both in this repo:
+
+* `DEPENDENCY-MAP.md` + `tables/` — the static call graph. Every Win32 symbol
+  with the translation units that call it and the site count
+  (`tables/win32_by_tu.csv`), the 14 class-A type names resolved to the structs
+  that declare them (`tables/classA_types.csv`), and the WinMain→first-frame
+  chain (`tables/critical_path.csv`). Tools: `tools/depmap.py`,
+  `tools/depmap-report.py`.
+* `RUNTIME-RELAY.md` — the same layer **measured instead of counted**. Wine is
+  the reference implementation of the layer being replaced and it is already on
+  the machine, so `CMR2.exe` under `WINEDEBUG=+relay` prints every Win32 call in
+  order on the real code path. Tools: `tools/relay-run2.sh`,
+  `tools/relay-scan.py`.
+
+The trick that makes the runtime half readable: relay prints a return address
+for every call, and `functions.tsv` carries address *and size* for all 3,650
+functions, so each call resolves to a decompiled function by exact containment.
+The trace becomes *"which decompiled function fires which Win32 call, in order."*
+
+### Numbers this adds, with their scope stated
+
+| quantity | value | scope |
+|---|---|---|
+| distinct Win32 symbols used | **85** | tree-wide, full Win32 name set |
+| Win32 call sites | **221** | comment/string-blanked scan |
+| D3D7/COM method sites | **278 / 298 / 518** | `pD3D->` only / `pD3D->`+`pDD->` / all typed receivers |
+| Win32 symbols the census missed but that fire on the boot path | **15** | relay vs grep |
+| decompiled functions that fire before a first frame | **23** | one 50 s run |
+
+The 278/298/518 row is not a correction of anything above — they are three
+different scopes and each is defensible. Quoting one without its scope is the
+error, which is the same one already recorded in §7.
+
+### The runtime finding that matters most
+
+Run with his prefix untouched, the shipped `CMR2.exe` performs **669 Win32
+calls and exits after one second**, having never touched `ddraw`, `dsound`,
+`dinput`, or a single asset file. `c:\error.txt` says *"Program finished
+normally"* — because `CGame::InitializeGame` reads a SKU value from
+`HKLM\SOFTWARE\Codemasters\Colin McRae Rally 2` and, if none of
+Europe/America/Japan/Poland match, calls `CGame::SetShouldExit()`.
+
+**A broken registry shim does not produce an error. It produces a one-second
+silent exit with a "finished normally" log.** With the registry values supplied
+(in a copy of the prefix, `WOW6432Node` — see `RUNTIME-RELAY.md` §2 for the
+32-bit redirection trap) the game goes on to `CGraphics::InitializeDirectX`,
+where `DirectDrawCreateEx` returns `DD_OK`, and then blocks on a modal
+`MessageBoxA("Setting configuration to defaults")`. That dialog is the current
+edge of what is measured; the D3D7 device and `Game_DrawSceneViewport` remain
+unmeasured at runtime.

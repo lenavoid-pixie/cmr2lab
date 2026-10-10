@@ -1,0 +1,22 @@
+missing_type,sites_in_struct,declaring_struct,files,typedef_found_in
+DIDEVCAPS,3,<file scope>,Input.cpp;platform/dx7compat.h,
+DIDEVCAPS,1,DIDEVCAPS,platform/dx7compat.h,
+DIDEVICEOBJECTINSTANCEA,3,<file scope>,Input.cpp;platform/dx7compat.h,
+DIDEVICEOBJECTINSTANCEA,1,DIDEVICEOBJECTINSTANCEA,platform/dx7compat.h,
+DIENVELOPE,3,<file scope>,Input.cpp;platform/dx7compat.h,
+DIENVELOPE,1,DIENVELOPE,platform/dx7compat.h,
+DIPROPDWORD,6,<file scope>,Input.cpp;platform/dx7compat.h,
+DIPROPDWORD,1,DIPROPDWORD,platform/dx7compat.h,
+DIPROPRANGE,3,<file scope>,Input.cpp;platform/dx7compat.h,
+DIPROPRANGE,1,DIPROPRANGE,platform/dx7compat.h,
+DPNAME,3,<file scope>,Game.cpp;platform/dx7compat.h,
+DSBCAPS,3,<file scope>,Sound.cpp;platform/dx7compat.h,
+DSBUFFERDESC,5,<file scope>,Sound.cpp;platform/dx7compat.h,
+IDirectSound,10,<file scope>,GameInfo.cpp;Sound.cpp;platform/dx7compat.h,
+IDirectSound3DBuffer,7,<file scope>,Sound.cpp;platform/dx7compat.h,
+IDirectSoundBuffer,21,<file scope>,Sound.cpp;platform/dx7compat.h,
+IDirectSoundBuffer,4,SoundSlot,Sound.h,
+IDirectSoundBuffer,2,CSound,Sound.h,
+LPCDPNAME,3,<file scope>,Game.cpp;platform/dx7compat.h,platform/dx7compat.h
+LPHWAVEIN,2,<file scope>,platform/deck_mm_shim.h,platform/deck_mm_shim.h
+LPHWAVEOUT,2,<file scope>,platform/deck_mm_shim.h,platform/deck_mm_shim.h
