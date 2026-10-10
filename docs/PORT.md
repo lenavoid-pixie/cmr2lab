@@ -28,12 +28,17 @@ Named, and recognisably the game:
 | `FrontendScreens.cpp` (12k) · `GameMenus.cpp` · `FrontendMenus.cpp` | the menus |
 | `Graphics.cpp` · `SceneNode.cpp` · `Input.cpp` · `Game.cpp` | the frame |
 
-**And the entire Windows surface is small:**
+**And the entire Windows surface is small** — these are re-run counts. The first
+pass at this said *149 D3D7 calls / 14 Win32 calls / 5 files containing
+`__asm`*, and **all three were wrong** (see `PORT-PLAN.md` §6):
 
 ```
-149  Direct3D 7 calls
- 14  Win32 calls
-  5  files containing __asm
+278  Direct3D 7 member call sites (`pD3D->`), 20 distinct methods
+225    of them in Graphics.cpp alone (81%)
+ 22  of the 278 are DRAWS; the other 256 are state
+ 20  DirectDraw / device-creation call sites (`pDD->`), 7 methods
+ 45  files that `#include <windows.h>`
+ 36  `__asm` occurrences, in 6 files — 0 visible to a non-MSVC compiler
 ```
 
 That is the entire distance between "the game" and "the game on Linux".
@@ -41,8 +46,9 @@ Everything else — physics, damage, AI, timing, the rally itself — is already
 C++ that has been reconstructed.
 
 So the port is not *reimplementing* CMR2. The port is **compiling the real game
-for native x86_64 Linux**: replace 149 D3D7 call sites with SDL3_GPU, stub 14
-Win32 calls, handle 5 files of assembly, and link.
+for native x86_64 Linux**: back 278 D3D7 call sites with SDL3_GPU, satisfy the
+Win32 declarations 45 files ask for, let 36 assembly blocks compile away (they
+are all inside `#ifdef _MSC_VER` with portable `#else` fallbacks), and link.
 
 ---
 
@@ -74,27 +80,52 @@ bytes feeding the scene-node table. `SceneNode.cpp` is the reference.
 
 ### NOT STARTED
 
-**M3 — the D3D7 → SDL3_GPU layer.** The measured surface: 16 methods, 225 call
-sites, of which **173 are state, not draws**. SDL3_GPU has no `SetRenderState`
-(it uses immutable pipeline objects), so this needs a **state tracker and a
-pipeline cache**: accumulate state, hash the combination, cache the pipeline per
-combination. The interface is sketched in `port/cmr2_rhi.h`.
+**M3 — the D3D7 → SDL3_GPU layer.** The measured surface, all of it, not just
+one file: **278 call sites, 20 methods, of which 256 are state and only 22 are
+draws.** The 225-call/16-method census published earlier was correct but scoped
+to `Graphics.cpp` alone; the tree-wide number is the one the port has to pay.
+SDL3_GPU has no `SetRenderState` (it uses immutable pipeline objects), so this
+needs a **state tracker and a pipeline cache**: accumulate state, hash the
+combination, cache the pipeline per combination. The interface is sketched in
+`port/rhi/cmr2_rhi.h` — 105 lines, interface only, no backend — which lives in
+the port working tree and is **not shipped in this repo**.
 
 This is the real mountain. It is also the part that makes the game *a game*
 rather than a renderer.
 
-**M4 — build the decomp, count what actually compiles.** An earlier count said
-19/66; that was before the loader fixes and has never been re-run. The honest
-number comes from running it.
+**M4 — build the decomp, count what actually compiles. COUNTED.** Re-run
+2026-10-10 with `tools/sweep-compile.sh`, one translation unit at a time, real
+`.o` files, `-ferror-limit=0`:
+
+| target | pass | fail |
+|---|---|---|
+| `x86_64-linux-gnu` — the mandate | **26 / 66** | 40 |
+| `x86-linux-gnu` (i386, kept as an oracle) | **53 / 66** | 13 |
+
+**27 files fail on x86_64 and pass on i386 — those 27 are blocked by nothing but
+pointer width.** Zero files pass on x86_64 and fail on i386. The other 13 fail
+on both, and they fail on **names, not width**: 12 of them on `LPHWAVEOUT` and
+one on `IID_IDirectInput7A`. Full breakdown, including what happens when you add
+that typedef: `PORT-PLAN.md` §3.
 
 ### KNOWN GAPS
 
-- **Textures: 0/27.** The `.bfl` table of contents has a **truncated final
-  record** — 16 bytes where every other record is 24 — so the backwards walk
-  fails on the first probe. Everything renders flat white until that is fixed.
-- **AddressSanitizer does not build** in the port's toolchain. All evidence so
-  far is empirical rather than instrumented. Flagged as the first thing to fix,
+- **Textures: 26 of 27, and this was fixed after the note that said 0/27.** The
+  `.bfl` table of contents ends in a **truncated final record** — 16 bytes where
+  every other record is 24 — so the original backwards walk failed on its first
+  probe and every part drew flat white. The reader now locates the table by its
+  own 24-byte stride instead, and `205a1N` decodes 26 textures from its
+  container. One name in the car's own texture list, `ap5unddf`, is **not in the
+  container at all** and falls back to a placeholder — that is a data fact, not
+  a parser bug.
+- **AddressSanitizer does not build** in the port's toolchain. All evidence here
+  is empirical rather than instrumented. Still the first thing worth fixing,
   because "the render looked right" is exactly the trap that hid the vertex bug.
+- **Transparency changes what the render metrics mean.** With textures loaded,
+  enclosed background shows through alpha parts, so a hole count is not
+  comparable to one taken with flat white. Stated wherever hole counts appear.
+- **The bridging metric is a dead end.** It was published as 0.00% vs 0.68% and
+  does not reproduce; re-run, it reads 0.00% for both readings. Withdrawn.
 
 ---
 
