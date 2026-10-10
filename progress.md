@@ -5,12 +5,12 @@ the timestamp below, it is not in this file. Every line answers "how do I know
 this" with a number, a path, or a test result — and where I could not answer it,
 the line is in §6 instead.
 
-**Last rewritten: 2026-10-10 14:47 EEST.** This file is one commit — the rewrite
+**Last rewritten: 2026-10-10 14:54 EEST.** This file is one commit — the rewrite
 that carried it is `git log -1 -- progress.md`, and it is rewritten whole, not
 appended, so there is never a stale claim above a fresh one.
 
-**On provenance, because this rewrite is 19 minutes after the last one.** §1, §2.8,
-§3A and §5 are measured at 14:47. Everything else in §2 is carried forward from the
+**On provenance, because this rewrite is 26 minutes after the last one.** §1, §2.8,
+§3A and §5 are measured at 14:47, and one §6 bullet was added at 14:54. Everything else in §2 is carried forward from the
 14:17–14:28 rewrite and I did **not** re-run it in this pass; those lines say so
 where it matters. Nothing here has been re-derived from memory.
 
@@ -314,6 +314,13 @@ once by a test harness of mine.
 - **`blocked: [t2]` on the wire is the queue's stale entry, not a real blocker.**
   The outbox is a faithful copy of a field that is wrong (§4). I did not fix the
   queue field; the daemon owns that file.
+- **The queue contains a duplicate id.** `GAME2-r5` appears **twice**, both `done`
+  (a hand-typed INPUT job, and a later "GO HAM ON THE GAME"). It is harmless today
+  because both halves are finished, but two consequences are real: `queue_total: 33`
+  is 33 *entries*, 32 distinct jobs; and the relay skips any incoming command whose
+  id already exists in the queue in **any** status, so a future command that happened
+  to reuse `GAME2-r5` would be dropped silently. I did not rename or delete either
+  entry — the daemon owns that file. Flagging it rather than fixing it.
 - **`daemon_age_s` tells you the status file is fresh, not that work is advancing.**
   A worker stuck inside one long `gdb` run keeps `status.json` ticking. `running_for`
   growing with `last_done` frozen is the pair to watch.
