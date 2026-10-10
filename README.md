@@ -82,3 +82,27 @@ Recovered from the loader at `CMR2.exe + 0x004B93C0`, reached from the
 `"PP_F"` compare at `+0x004B9389`.
 
 `N` = body, `L` = left wheel, `S` = right wheel.
+
+**The topology is an indexed triangle list** — settled by the game's own
+decompiled loader (`Graphics.cpp:3209` calls `DrawIndexedPrimitiveVB` with
+`D3DPT_TRIANGLELIST`), plus statistical, count-parity and render evidence.
+See the top of `docs/C3D.md`. A triangle strip was tested, produced a
+convincing-looking car, and was **wrong**.
+
+## Update — the native port
+
+Since 2000 the game has only ever run on Windows. `docs/PORT.md` tracks
+**compiling the actual game for native Linux — no Wine, no Proton.**
+
+A decompilation of the PC build exists: **122 files, 135,805 lines of C++**.
+The entire remaining Windows surface is:
+
+```
+149  Direct3D 7 calls
+ 14  Win32 calls
+  5  files containing __asm
+```
+
+That is the whole distance. `src/port/` holds the native renderer — C + SDL3,
+built rootless with `zig cc`, opening a real Vulkan window and drawing a model
+straight out of the retail files. It renders a car. It is not a game yet.

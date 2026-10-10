@@ -4,6 +4,63 @@ Shared by **cars and tracks**. Recovered from the loader at
 `CMR2.exe + 0x004B93C0` — the function the `"PP_F"` string compare at
 `+0x004B9389` calls when the magic matches.
 
+## ★★★ TOPOLOGY — SOLVED: it is an INDEXED TRIANGLE LIST
+
+Not a triangle strip. This was tested properly and settled by four independent
+lines of evidence, and the first one is the only one that actually decides it.
+
+**1. The game's own loader (ground truth).**
+`Graphics.cpp:3209` builds an index buffer from `vertexIndex[0..2]` and calls
+`DrawIndexedPrimitiveVB(D3DPT_TRIANGLELIST, ...)`. `Sector.cpp`'s
+`Sector_RelocateStageMeshFile` (`0x004b93c0`) is the same reader this format
+documents. That is the format's own source code stating its topology. It is not
+an inference from a render.
+
+**2. Statistical.**
+Every offset and stride was brute-forced across all 259 cars, 2,075 parts and
+119,753 face records. Offset `+0x40` yields a valid, non-degenerate index triple
+in **99.968%** of records. The expected number of accidental hits over that many
+records is about **0.0003**. Observed: 119,715.
+
+**3. Count parity.**
+Indexed yields exactly **888 triangles = the header's `c20`**, the recorded face
+count. The strip reading invents 1,176 (+32%) and would leave the whole 67 KB
+triangle block as dead weight that the loader nonetheless walks.
+`sum(part.F) == c20` in **254 / 259** files.
+
+**4. Render, both ways.**
+Four angles each. Indexed is **watertight** — 0 interior holes, 1 connected
+component. Strip leaves **120–337 holes** and splits the model into up to 4
+components. Bridging distance 0.00% vs 0.68%.
+
+### Why a render could never have settled this — stated plainly
+
+Both readings produce a **recognisable car**. The difference is roughly **0.3%
+of covered pixels**. An early strip render looked correct and was treated as
+confirmation; it was not evidence. The thing that settled it was finding the
+decompiled loader. **A plausible-looking silhouette is not proof.**
+
+Two dead ends, recorded so nobody repeats them:
+
+- **Edge-manifoldness does not discriminate.** A triangle strip is manifold *by
+  construction* and scores **better** than the real mesh. Useless as a test.
+- **Bridging distance is too small to be decisive on its own** (0.68% vs 0.00%).
+  It corroborates; it does not conclude.
+
+### The vertex base — an earlier version was 12 bytes late
+
+The base was previously taken as `C14+12` with position at `+36`. That is
+algebraically **the next vertex's position**, so every vertex was drawn carrying
+its **neighbour's** coordinates, with normals and UVs read from the wrong fields.
+It still produced a car-shaped silhouette, which is exactly why it survived so
+long.
+
+Corrected, the vertex block reconciles **byte-exact** against the payload, and
+the result is a real **3.82 × 1.28 × 1.78 m Peugeot 205** — watertight, wheels
+in the right places.
+
+---
+
 ## Header — 48 bytes
 
 ```
