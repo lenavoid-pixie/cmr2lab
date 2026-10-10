@@ -25,6 +25,62 @@ Paths, so they line up on both ends:
 |---|---|
 | the install | `~/lena/.lena_cmr2/game` (**638 MB** retail PC install; 259 `.c3d`, 220 car containers. It said 2.26 GB here — that was the disc-image copies in `gamedata/`, corrected §0b/§6) |
 
+## 0f. WHAT A RACE IS ACTUALLY ASKED TO DRAW — and what it drops. added 2026-10-11 02:2x EEST by the `work/RACE` worker; appended, nothing above or below it touched
+
+**§0e said: a stage runs, the picture is not a road.** This block answers the
+question that sentence left open — *what is the RHI being asked to draw during the
+race loop, and what is it dropping* — and it narrows the fault from "the stage is
+not drawn" to "the stage is drawn white, opaque, in the right place, and the
+texture that would make it a road arrives non-image-like and half transparent".
+
+Full write-up: `work/RACE/WHAT-IS-DRAWN.md` (on the Deck). Every number below is
+from the game's own binary tonight, in runs `geo1`–`aw1`, **0 ring timeouts**.
+
+**Asked to draw, per frame, frontend vs race** — frontend 2D draws 336 → **race 5**;
+frontend 3D mesh draws **0** → **race 286**, 19,415 vertices, 5,358 fully-on-screen
+triangles, **21 screens worth of triangle area**. The family that takes over is the
+indexed T&L mesh path, and with it switched off at record time the frame is the
+clear colour and nothing else (99.8–100 %): **the 3D path is the entire picture.**
+
+**Two things fall out of a frame-scheduled A/B done inside ONE run** (four states of
+the same moving scene ~1 s apart, so nothing is a run-to-run difference):
+
+* **without its texture the geometry renders flat opaque WHITE over 32.5 % of the
+  frame.** Geometry, transform, culling, rasterisation and compositing all work.
+  The failure is not geometry.
+* **every 3D draw in a race is submitted with `ALPHABLENDENABLE=1` and
+  `ALPHATESTENABLE=1`** (all 34,327 draws in a 120-frame window), blend factors
+  SRCALPHA/INVSRCALPHA, and 100 of the 286 per frame have ZWRITE off. The road is
+  being drawn as a ~40 %-opaque wash, 21 screens of it per frame.
+
+**Dropped, now with the values the game asked for** (the census printed counts
+before, not values): `CLIPPING=1`, `COLORVERTEX=1`, `EMISSIVEMATERIALSOURCE=1`,
+`TEXTUREFACTOR=0x75000000` (**new in the race**, unmapped), and
+`TEXTURETRANSFORMFLAGS=0` = DISABLE — so projected texture coordinates are not in
+play at all. One correction worth keeping: **`DIFFUSEMATERIALSOURCE=0` =
+`D3DMCS_MATERIAL`, not COLOR1** — the port's hardcoded material colour source is
+right, and the obvious-looking fix "use the vertex colour" would have been wrong.
+
+**Where it now lives: the stage's textures.** Dumping every texture the RHI
+uploads: the frontend's arrive 90–100 % self-similar (images, masks with alpha —
+correct); the stage's arrive **0.3–2.1 % self-similar, ~25 % of texels one single
+constant colour, mean alpha 75–154 of 255**. And the port is not lying about the
+format — the game asks for 32-bit textures, gets pitch = 4·w, and writes densely
+(13,004 of 16,384 bytes, all 64 rows). The surface the RHI **uploads from is not
+the surface the game wrote**, so the copy between them is the next question.
+
+**Three plausible hypotheses were killed by measurement rather than by argument,
+and are recorded dead:** the composed W/V/P is correct (WORLD identity, VIEW rigid
+and orthonormal, PROJ a textbook D3D perspective, printed as the game set them);
+projective UVs are not in play; and nothing in the draw path is refused
+(`refusedFvf=0`, `clamps=0`, `refused_by_backend=0` in every race census).
+
+**Not moved:** the picture. `work/PLAY/out-plain/cmr2` and `out-race/cmr2` are
+still `b46d80fee5489834b87f843fd15484e0`, 66/66 game objects, and the two
+instrumented RHI objects in the tree are inert unless their env vars are set.
+
+---
+
 ## 0e. A STAGE IS REACHED — the frontend hands off and the game loads and runs one. added 2026-10-11 00:1x EEST by the `work/RACE` worker; appended, nothing above it touched
 
 **The wall every previous round hit is down, and it was two walls, one behind the
