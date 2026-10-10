@@ -125,6 +125,32 @@ Texture stage: `TEXCOORDINDEX`, `TEXTURETRANSFORMFLAGS`, `MIPFILTER`,
 `MAXMIPLEVEL`, and the five `BUMPENVMAT*`/`BUMPENVL*` — 10 of 19 named states,
 same treatment.
 
+### 4.1 AND THE SAME LIST, MEASURED AT RUNTIME (20 s run, `[CENSUS] DROPPED`)
+
+The census now records **which** state was dropped, not just how many. From the
+game's own binary:
+
+```
+DROPPED render states (raw state: calls):
+  136:9049   141:4525   145:4525   2:1  4:1  8:1  33:1  41:1  138:1  146:1  147:1  148:1
+DROPPED texture stage states (stage/type: calls):
+  s0/t11:2878  s0/t18:2878  s0/t20:2878  s0/t24:2878
+```
+
+Resolved against `dx7compat.h`: `136` CLIPPING (9,049 calls), `141` COLORVERTEX
+and `145` DIFFUSEMATERIALSOURCE (4,525 each), `146/147/148` the other material
+sources, `2` ANTIALIAS, `4` TEXTUREPERSPECTIVE, `8` FILLMODE, `33` STIPPLEDALPHA,
+`41` COLORKEYENABLE, `138` EXTENTS; and `t11` TEXCOORDINDEX, `t18` MIPFILTER,
+`t20` MAXMIPLEVEL, `t24` TEXTURETRANSFORMFLAGS — 2,878 calls each.
+
+**This is the source census of §4 confirmed independently, by a different method,
+at runtime** — same states, now with counts. Two states in the source list
+(`FOGCOLOR`/`FOGSTART`/`FOGEND` and the bump-env block) do **not** appear at
+runtime: the fog states are behind `Graphics_GetDeviceCaps90()` and nothing on the
+reachable path turns them on, and the bump-env states are only set by a texture
+configuration this run never enters. Both remain real gaps; neither is being hit
+yet, and saying which is which is the difference between a list and a scare.
+
 A dropped state is **not a crash**: `deck_dd7.cpp` returns `D3D_OK` and counts it
 in `ignoredStates`, because a stub that refuses is worse than one that lies about
 *why*. The measurement says this is not hypothetical: **29,512 silently ignored

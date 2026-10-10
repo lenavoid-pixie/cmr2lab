@@ -62,6 +62,19 @@ mode, `NORMALIZENORMALS`, `LOCALVIEWER`, `TEXTUREFACTOR`; `TEXCOORDINDEX`,
 the lit-mesh path's whole vocabulary. For 2D it mostly costs nothing; for a car on
 a stage it is the difference between shaded and flat.
 
+**And the drop list is now measured rather than inferred.** The census names the
+state, not just the total (20 s run): `136` CLIPPING **9,049** calls, `141`
+COLORVERTEX and `145` DIFFUSEMATERIALSOURCE **4,525** each, plus the other
+material sources, ANTIALIAS, TEXTUREPERSPECTIVE, FILLMODE, STIPPLEDALPHA,
+COLORKEYENABLE, EXTENTS — and on the texture stages `t11` TEXCOORDINDEX, `t18`
+MIPFILTER, `t20` MAXMIPLEVEL, `t24` TEXTURETRANSFORMFLAGS at **2,878** calls
+each. That is the source list confirmed by a second method, at runtime, with
+counts. Two entries in the source list (**fog colour/start/end, and the
+`BUMPENV*` block**) do *not* fire on this path — fog sits behind
+`Graphics_GetDeviceCaps90()`, bump-env behind a texture configuration this run
+never enters. They are still gaps; they are not being hit yet, and saying which is
+which is the difference between a list and a scare.
+
 ### The two census numbers settle like this — and the README was RIGHT
 
 **278 and 298 are the same census at two scopes, not two answers.**
