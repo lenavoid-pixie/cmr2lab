@@ -10,6 +10,10 @@ pretty-frame worker; the rest of the file is that 14:54 rewrite, unverified by m
 that carried it is `git log -1 -- progress.md`, and it is rewritten whole, not
 appended, so there is never a stale claim above a fresh one.
 
+**Blocks §0, §0.5 and §0a were appended after that rewrite, each saying so at its
+own head. §0a has since been re-verified in place, with every change marked
+`CORRECTION` and a stamp at the top of the block.**
+
 **On provenance, because this rewrite is 26 minutes after the last one.** §1, §2.8,
 §3A and §5 are measured at 14:47, and one §6 bullet was added at 14:54. Everything else in §2 is carried forward from the
 14:17–14:28 rewrite and I did **not** re-run it in this pass; those lines say so
@@ -21,7 +25,7 @@ Paths, so they line up on both ends:
 |---|---|
 | the install | `~/lena/.lena_cmr2/game` (2.26 GB retail PC install; 259 `.c3d`, 220 car containers) |
 
-## 0a. THE MIRRORED FLANK — CLOSED. added 2026-10-10 18:35 EEST
+## 0a. THE MIRRORED FLANK — CLOSED. added 2026-10-10 18:27 EEST (commit `49d45ad`; the block below first said 18:35, which is later than the commit that carried it — corrected in the re-verification pass)
 
 **Question, from the phone, and nobody else's queue:** in the 4-car frame and the
 single 205 frame the decals on one flank read correctly and the lettering on the
@@ -36,6 +40,20 @@ this file.** Everything below §0a is carried forward untouched. The one edit I
 made outside this block: the path table above had lost its last row into the §0
 heading; I completed that row with the install path I actually measured against
 (`~/lena/.lena_cmr2/game`), which is all it was missing.
+
+**Re-verified and corrected 2026-10-10 18:31 EEST by the second worker on this same
+job** (the first pass committed and then ran out of steps; it left no checkpoint, so
+this pass re-derived everything instead of trusting its notes). All of the commands
+below were re-run on the Deck and the engine paragraphs were re-read in
+`~/.lena_cmr2/upstream/CMR2Decomp`: `Game_DrawMeshTextureRuns` (`Game.cpp:2114`) binds
+the file's own per-triangle texture and nothing else; `SetTexCoordIndex`
+(`Graphics.cpp`) sets `D3DTSS_TEXTURETRANSFORMFLAGS, 0` on every path it takes.
+**The verdict is unchanged — FAITHFUL, not a binding bug.** Three things in this block
+were wrong and are marked `CORRECTION` inline: one over-claimed line about one-sided
+textures, one row of the sample vertex table that was a mis-paired vertex, and the
+header time. `tools/flank_mirror.py` grew a `BODIES` mode and a `PAIRS` dump so the
+headline numbers now reproduce **verbatim** from the command list, which the earlier
+list did not actually do.
 
 ### The three questions the phone asked, answered in order
 
@@ -63,14 +81,30 @@ sides (`08BodySim` 101 faces at z>0.3, 83 at z<-0.3; `08BodySim` has V=247, an
 odd count — the two flanks are not copies). Every body part's node is the
 identity matrix, so the mesh data *is* the world data for panels.
 
-**3. Is there a distinct LEFT texture in the trailer?** No — corpus-wide. Over
-the 259 `.c3d` in the install, **192/205 files with flank triangles use the
-*same* body/livery texture on both flanks** (measured: the texture with the most
-triangles is in both the left-flank and right-flank index sets). 0 files have a
-left-only body texture. The 43 files whose left/right *sets* differ do so by one
+**3. Is there a distinct LEFT texture in the trailer?** No. Over the 259 `.c3d` in
+the install, **192/205 files with flank triangles use the *same* body/livery
+texture on both flanks** (measured: the texture with the most triangles is in both
+the left-flank and right-flank index sets). Over the **23 `*a1N` exterior car
+files — the set that carries a livery, and the set in the frames — it is 23/23**,
+printed by `BODIES` below. The 43 files whose left/right *sets* differ do so by one
 underside / glass / single-panel index that my `|Nz| > 0.75` threshold caught on
-one side only; the body texture is in both sets on every one of them. So there is
-nothing for our binding to have got wrong: there is no second texture to bind.
+one side only — the `a1N` five are `ap5unddf` (underbody), `AAQGliDf`, `aesglod2`,
+`ASIGlODf` (glass) and `afpintdf` (interior); the body texture is in both sets on
+all 23 bodies.
+
+**CORRECTION — this paragraph first said "0 files have a left-only body texture"
+and "the body texture is in both sets on every one of them", and both halves of
+that are wrong as written.** Measured corpus-wide now: **2 files put their
+most-used texture on the LEFT flank only** (`esca5`, `escc5`) and **11 on the
+RIGHT only** (`205a5`, `205c5`, `cora5`, `ma1a5`, `ma1c5`, `ma2a5`, `ma2c5`,
+`ma3a5`, `ma3c5`, `mita5`, `mitc5`). They are not a counter-example, and the
+reason is measurable: all 13 are **`*a5` / `*c5` cockpit-interior files** (their
+parts are `20interior`, `27swheel`, `22wiperL`/`22wiperR`, `28gearhand`,
+`41Speedo`, `30dash`), so their most-used texture is a dash / door-card texture
+and the triangles my flank band catches in them are interior trim and glass, not
+artwork. Restricted to the files that carry a livery — the 23 `*a1N`, which is all
+the `BODIES` mode counts — it is **23/23 on both flanks, 0 one-sided**. So there
+is nothing for our binding to have got wrong: there is no second texture to bind.
 
 ### What the data actually does, measured
 
@@ -83,25 +117,65 @@ flank triangle pairs with u complemented (u' = 1-u)      :    1
 neither (different tessellation on the two flanks)       :  425
 ```
 
-Per car, `seaa1N` is 90 / 1 / 13 and `205a1N` is 66 / 0 / 30 — and the pairs are
-exact, not approximate. One Seat Cordoba front-side-panel pair:
+Per car, `seaa1N` is 90 / 1 / 13 and `205a1N` is 66 / 0 / 30 — and the pairs are exact, not approximate.
+Three vertices of one `seaa1N` (`08BodySim`) front-wing triangle and their
+mirror partners, copied out of `python3 tools/flank_mirror.py PAIRS seaa1N --xyz`
+(the matcher requires each vertex to have a partner within 2e-3 on x, y and −z):
 
 ```
-P=( 0.778, 0.175, -0.783)  uv=(0.727, 0.820)      P=( 0.778, 0.175, +0.783)  uv=(0.727, 0.180)
-P=( 0.176, 0.033, -0.835)  uv=(0.566, 0.857)      P=( 0.021, 0.035, +0.835)  uv=(0.524, 0.143)
-P=(-0.423, 0.215, -0.783)  uv=(0.405, 0.809)      P=(-0.423, 0.215, +0.783)  uv=(0.405, 0.191)
+P=(-0.829,-0.267,+0.896)  uv=(0.297,0.063)      P'=(-0.829,-0.267,-0.896)  uv=(0.297,0.937)
+P=(-0.368,-0.492,+0.835)  uv=(0.420,0.003)      P'=(-0.368,-0.492,-0.835)  uv=(0.420,0.997)
+P=(-0.424,-0.268,+0.830)  uv=(0.405,0.063)      P'=(-0.424,-0.268,-0.830)  uv=(0.405,0.937)
 ```
 
+`x` and `y` are identical and `z` changes sign, exactly; `u` is identical to three
+decimals at every mirrored vertex (0.297/0.297, 0.420/0.420, 0.405/0.405); `v` is
+the complement (0.063/0.937, 0.003/0.997).
+
+**CORRECTION — the table that stood here had a mis-paired row.** Its second row
+was `P=( 0.176, 0.033, -0.835)` against `P=( 0.021, 0.035, +0.835)`: `x` does not
+match, so it is not a mirrored pair at all, and its `u` differs by 0.042 —
+i.e. it was a vertex from the `neither` bucket sitting in a table meant to show
+the same-`u` relation. Rows 1 and 3 of it were real, and had been rounded by hand
+to the vertex `z` rather than the triangle centroid; the rows above are verbatim
+tool output instead. **It never touched the counts** (2025 / 1 / 425), which come
+from the tool, not from the table.
+
+**The 1 complemented pair, named, because it was the last loose end.** The tool
+prints its example now, and it is a wrap seam, not a mirrored island: `u=0.004`
+against `u=0.997` on `seaa1N` `05BonCamDay`. Every one of the **4** such pairs in
+the whole corpus (`seaa1N`, `seac1`, `seac3`, `audc1` — one each) sits on those
+seams (`u=0.004` vs `0.997`, `u=0.000` vs `0.999`, `u=0.014` vs `0.989`: the same
+texel reached from the other end of 0..1). **4 pairs out of 12,484, all of them
+at the seam, 0 genuine `u' = 1-u` pairs.**
 Same `x` ⇒ **same `u`** (0.727/0.727, 0.405/0.405), and `v` is the complement
 (0.820/0.180, 0.809/0.191 — `v' = 1 - v` to three decimals). So the livery's
 "along the car" coordinate runs the same way round the car on both flanks, and
 the texture's two halves are vertical mirrors of each other (normalised
-cross-correlation on that car's body texture, `seaa1N` `ASCDBoDf`, band
-`u[0.40,0.76] v[0.79,0.88]` against `u[0.40,0.76] v[0.12,0.21]`: **0.845 for
-`A` vs `flipud(B)`**, **-0.152 for `A` vs `fliplr(B)`**). The `v' = 1-v` mapping
-therefore lands both flanks on the same artwork, upright — and the only
-difference left is the horizontal sense. **Viewed from outside, one flank is the
-horizontally mirrored image of the other.** That is what the phone saw, and it is
+  cross-correlation on that car's body texture, `seaa1N` `ASCDBoDf`, band
+  `u[0.40,0.76] v[0.79,0.88]` against `u[0.40,0.76] v[0.12,0.21]`: **0.845 for
+  `A` vs `flipud(B)`**, **-0.152 for `A` vs `fliplr(B)`**).
+
+**That correlation, re-measured through a tool in the re-verification pass,** so
+it is no longer a number with no script behind it:
+
+```
+TEXDUMP=/tmp/q2tex <build>/cmr2deck seaa1N --game ~/.lena_cmr2
+python3 tools/flank_art.py /tmp/q2tex        # <- new, stdlib only
+  NCC(A, B (no flip)       ) = +0.218
+  NCC(A, flipud(B)         ) = +0.816     <- the claim
+  NCC(A, fliplr(B)         ) = -0.176     <- and the other half of it
+  NCC(A, fliplr(flipud(B)) ) = -0.030
+```
+
+Same relation, coefficients a little different from the 0.845 / -0.152 first
+written down: a different viewer build's decode of the same `.bfl` block (the
+texture is 1024x1024, so a 93x369-pixel band pair), not a different finding.
+`flipud` strongly positive and `fliplr` negative in both passes is the whole
+claim, and the sign of `fliplr` is the load-bearing part.
+**What that buys:** the `v' = 1-v` mapping therefore lands both flanks on the
+same artwork, upright — and the only difference left is the horizontal sense.
+**Viewed from outside, one flank is the horizontally mirrored image of the other.** That is what the phone saw, and it is
 in the file.
 
 Two more measurements that close the escape routes:
@@ -152,16 +226,36 @@ The correct action is to record it and stop looking at it.
 
 ```
 python3 tools/flank_mirror.py PAIR seaa1N 205a1N     # the pair relation, per car
-python3 tools/flank_mirror.py PAIR --all             # all 23 body meshes
+python3 tools/flank_mirror.py PAIRS seaa1N --xyz     # every matched pair, one line each
+python3 tools/flank_mirror.py BODIES                 # 23 *a1N bodies: 2025 / 1 / 425
+python3 tools/flank_mirror.py PAIR --all             # the pair relation, all 259 cars
 python3 tools/flank_mirror.py CORPUS                 # 259 .c3d: textures + u direction
+python3 tools/flank_art.py <TEXDUMP dir>              # the texture-side correlation
 ```
 
-`tools/flank_mirror.py` (new, stdlib only, parses the container the same way
-`cmr2deck.c` does) prints exactly the numbers above. The corpus line
-`du/dx sign over outer flank triangles L+: 5843 L-: 887 R+: 5948 R-: 1114 / cars
-whose two flanks run u the same way: 181 (opposite: 11)` is the same finding as
-the 2025/1 pair count from the other direction: the 11 "opposite" files are all
-small non-body files (`*a5` / `*c5`, 1–3 flank triangles each), not bodies.
+`tools/flank_mirror.py` (stdlib only, parses the container the same way
+`cmr2deck.c` does) prints exactly the numbers above. Two of these commands were
+added in the re-verification pass, and they are the ones that make the headline
+counts exact:
+
+- **`BODIES`** prints `body/livery texture used by BOTH flanks: 23 / 23`,
+  `mirrored-pair triangles: same u 2025  u complemented 1  neither 425`,
+  `du/dx L+: 1076 L-: 257 R+: 1055 R-: 309`, `cars whose two flanks run u the
+  same way: 23 (opposite: 0)`. The **2025 / 1 / 425 is the sum over the 23 `a1N`
+  files**, which is what the block means by "the 23 body meshes".
+- The earlier command list labelled `PAIR --all` as "all 23 body meshes". That was
+  wrong: `PAIR --all` is **all 259** cars, and sums to **10476 / 4 / 2004** —
+  interiors included. Anyone who followed the old list and added it up would have
+  got a number that contradicts this block. Corrected here.
+- `CORPUS`: `du/dx sign over outer flank triangles L+: 5843 L-: 887 R+: 5948
+  R-: 1114 / cars whose two flanks run u the same way: 181 (opposite: 11)` is the
+  same finding from the other direction. The 11 "opposite" files are **all
+  `*a5` / `*c5` cockpit interiors** — nine of them carry a single flank-band
+  triangle on one side against 18 on the other, the other two are `6r4a5` /
+  `6r4c5` (29/2 and 35/1) and `corc5` (1/12). (The block first described these as
+  "1–3 flank triangles each", which is true of the one-sided texture files, not of
+  these; the substantive claim — they are interiors, not bodies — was right.)
+
 
 ## 0. THE FRAME MIAMI ASKED FOR — added 2026-10-10 15:15 EEST by the worker on
 ## the "make the port a pretty thing to look at" job.

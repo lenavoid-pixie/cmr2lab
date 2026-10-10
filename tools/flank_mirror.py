@@ -15,11 +15,17 @@ Three measurements, all from the files, no rendering:
   2. TEXTURES  do the left flank and the right flank name the same texture?
                A distinct LEFT texture would make the mirroring our bug.
   3. CORPUS    (1) and (2) over every .c3d in the install, as counts.
+  4. BODIES    (1) and (2) over the 23 *a1N exterior car files only -- the set
+               that carries a livery.  (The *a5 / *c5 files are cockpit
+               interiors; the flank-band triangles in them are door cards,
+               dash and glass, not artwork.)
 
 Usage:
     tools/flank_mirror.py PAIR  <car>              # one car, the pair relation
-    tools/flank_mirror.py CORPUS [CARS_DIR]
-    tools/flank_mirror.py PAIR  --all              # the pair relation, all cars
+    tools/flank_mirror.py PAIR  --all              # the pair relation, all 259 cars
+    tools/flank_mirror.py CORPUS [CARS_DIR]        # every .c3d, as counts
+    tools/flank_mirror.py BODIES [CARS_DIR]        # the 23 exterior bodies only
+    tools/flank_mirror.py PAIRS <car> [--xyz]      # every matched pair, one line each
 """
 import gzip, math, os, struct, sys
 from collections import Counter
@@ -111,20 +117,18 @@ def uv_frame(t):
 
 
 # --------------------------------------------------------------- measurement 1 --
-def pair_report(car, cars_dir=DEFAULT_CARS, verbose=True):
-    """Match triangles of one car against their z-mirrors and report the uv relation."""
-    T, tex = parse(os.path.join(cars_dir, car + ".c3d"))
-    c = Counter(t["tex"] for t in T)
-    body = c.most_common(1)[0][0]
-    # index triangles by the sorted set of their z-mirrored centroids, coarsely
-    grid = {}
-    for t in T:
-        cc = centroid(t)
-        key = (round(cc[0], 1), round(cc[1], 1), round(cc[2], 1))
-        grid.setdefault(key, []).append(t)
-
-    ident = mir = other = 0
-    examples = []
+def matched_pairs(T, body, grid=None):
+    """Yield (t, u, pairs) for every flank triangle of texture `body` that has a
+    z-mirror partner in the same mesh: u mirrors t in position, and `pairs` are
+    the vertex index pairs matched position-to-mirrored-position.  Triangles with
+    no partner (the two flanks tessellated differently) are not yielded."""
+    if grid is None:
+        # index triangles by the rounded z-mirrored centroid
+        grid = {}
+        for t in T:
+            cc = centroid(t)
+            key = (round(cc[0], 1), round(cc[1], 1), round(cc[2], 1))
+            grid.setdefault(key, []).append(t)
     for t in T:
         if t["tex"] != body:
             continue
@@ -166,9 +170,21 @@ def pair_report(car, cars_dir=DEFAULT_CARS, verbose=True):
                     break
             if best:
                 break
-        if not best:
-            continue
-        u, pairs, n = best
+        if best:
+            yield t, best[0], best[1]
+
+
+def pair_report(car, cars_dir=DEFAULT_CARS, verbose=True):
+    """Match triangles of one car against their z-mirrors and report the uv relation."""
+    T, tex = parse(os.path.join(cars_dir, car + ".c3d"))
+    body = Counter(t["tex"] for t in T).most_common(1)[0][0]
+
+    ident = mir = other = 0
+    examples = []
+    mir_examples = []
+    for t, u, pairs in matched_pairs(T, body):
+        n = len(pairs)
+        cc = centroid(t)
         same = all(abs(t["uv"][i][0] - u["uv"][j][0]) < 3e-3 for i, j in pairs)
         mirrored = all(abs((1.0 - t["uv"][i][0]) - u["uv"][j][0]) < 3e-3 for i, j in pairs)
         # v: the complement shows up as the two flanks sampling the two halves of
@@ -182,6 +198,11 @@ def pair_report(car, cars_dir=DEFAULT_CARS, verbose=True):
                                  round(cc[2], 2), round(centroid(u)[2], 2)))
         elif mirrored:
             mir += 1
+            if len(mir_examples) < 2:
+                mir_examples.append((t["part"], u["part"], n,
+                                     [(round(t["uv"][i][0], 3), round(t["uv"][i][1], 3),
+                                       round(u["uv"][j][0], 3), round(u["uv"][j][1], 3)) for i, j in pairs],
+                                     round(cc[2], 2), round(centroid(u)[2], 2)))
         else:
             other += 1
     if verbose:
@@ -194,6 +215,11 @@ def pair_report(car, cars_dir=DEFAULT_CARS, verbose=True):
             for a, b, c2, d in e[3]:
                 print(f"        uv (u={a:.3f},v={b:.3f})  <->  (u={c2:.3f},v={d:.3f})"
                       f"   u same={abs(a-c2)<3e-3}  v'=1-v={abs(b-(1-d))<3e-3}")
+        for e in mir_examples:
+            print(f"  MIRRORED-IN-THE-UVs e.g. {e[0]} (z={e[4]}) <-> {e[1]} (z={e[5]}), {e[2]}/3 matched:")
+            for a, b, c2, d in e[3]:
+                print(f"        uv (u={a:.3f},v={b:.3f})  <->  (u={c2:.3f},v={d:.3f})"
+                      f"   u'=1-u={abs((1.0-a)-c2)<3e-3}")
     return ident, mir, other
 
 
@@ -236,6 +262,7 @@ def corpus(cars_dir=DEFAULT_CARS, limit=None):
         files = files[:limit]
     same_tex = diff_tex = nodata = 0
     body_both = 0
+    left_only, right_only = [], []
     same_dir = diff_dir = 0
     tot = Counter()
     for f in files:
@@ -255,6 +282,10 @@ def corpus(cars_dir=DEFAULT_CARS, limit=None):
             diff_tex += 1
         if body in L and body in R:
             body_both += 1
+        elif body in L:
+            left_only.append(f[:-4])
+        else:
+            right_only.append(f[:-4])
         cnt = flank_udir(T, body)
         tot.update(cnt)
         if cnt[("L", "+")] + cnt[("L", "-")] and cnt[("R", "+")] + cnt[("R", "-")]:
@@ -265,6 +296,10 @@ def corpus(cars_dir=DEFAULT_CARS, limit=None):
     print(f"# corpus: {len(files)} .c3d files in {cars_dir}")
     print(f"  flank triangles present : {same_tex + diff_tex}   (no flank data: {nodata})")
     print(f"  the body/livery texture is used by BOTH flanks        : {body_both}")
+    print(f"  ...of those, the most-used texture on the LEFT only   : {len(left_only)}"
+          + (f"   {left_only}" if left_only else ""))
+    print(f"  ...and on the RIGHT only                              : {len(right_only)}"
+          + (f"   {right_only}" if right_only else ""))
     print(f"  left flank and right flank name exactly the same texture set : {same_tex}"
           f"   (differ by one panel/underside/glass entry: {diff_tex})")
     print(f"  du/dx sign over outer flank triangles  L+: {tot[('L','+')]}  L-: {tot[('L','-')]}"
@@ -273,10 +308,56 @@ def corpus(cars_dir=DEFAULT_CARS, limit=None):
           f"   (opposite: {diff_dir})")
 
 
+# ------------------------------------------------- the 23 exterior car bodies --
+def bodies_report(cars_dir=DEFAULT_CARS):
+    """The *a1N exterior car files only -- the ones that carry a livery.
+
+    Corpus-wide counts mix these with the *a5 / *c5 cockpit interiors, whose
+    most-used texture is a dash/door-card texture and whose flank-band
+    triangles are not artwork.  This is the same measurement on the set that
+    is actually in the frames."""
+    files = sorted(f for f in os.listdir(cars_dir) if f.endswith("a1N.c3d"))
+    same_tex = diff_tex = both = 0
+    one_sided = []
+    ident = mir = other = 0
+    sd = dd = 0
+    tot = Counter()
+    for f in files:
+        T, _ = parse(os.path.join(cars_dir, f))
+        if not T:
+            continue
+        body = Counter(t["tex"] for t in T).most_common(1)[0][0]
+        L, R = flank_textures(T)
+        same_tex += (L == R)
+        diff_tex += (L != R)
+        if body in L and body in R:
+            both += 1
+        else:
+            one_sided.append(f[:-4])
+        cnt = flank_udir(T, body)
+        tot.update(cnt)
+        if (cnt[("L", "+")] + cnt[("L", "-")]) and (cnt[("R", "+")] + cnt[("R", "-")]):
+            if (cnt[("L", "+")] > cnt[("L", "-")]) == (cnt[("R", "+")] > cnt[("R", "-")]):
+                sd += 1
+            else:
+                dd += 1
+        i, m, o = pair_report(f[:-4], cars_dir, verbose=False)
+        ident += i; mir += m; other += o
+    print(f"# a1N exterior bodies: {len(files)} files in {cars_dir}   <- the cars in the frames")
+    print(f"  body/livery texture used by BOTH flanks           : {both} / {len(files)}"
+          + (f"   ONE-SIDED: {one_sided}" if one_sided else "   (no file uses a one-sided livery)"))
+    print(f"  left and right flank name identical texture sets  : {same_tex}"
+          f"   (differ by one underside/glass/interior index: {diff_tex})")
+    print(f"  mirrored-pair triangles: same u {ident}   u complemented {mir}   neither {other}")
+    print(f"  du/dx sign over outer flank triangles  L+: {tot[('L','+')]}  L-: {tot[('L','-')]}"
+          f"   R+: {tot[('R','+')]}  R-: {tot[('R','-')]}")
+    print(f"  cars whose two flanks run u the same way          : {sd}   (opposite: {dd})")
+
+
 # ---------------------------------------------------------------------- main --
 if __name__ == "__main__":
     a = sys.argv[1:]
-    if not a or a[0] not in ("PAIR", "CORPUS"):
+    if not a or a[0] not in ("PAIR", "CORPUS", "BODIES", "PAIRS"):
         print(__doc__); sys.exit(2)
     if a[0] == "PAIR":
         if len(a) > 1 and a[1] == "--all":
@@ -289,5 +370,26 @@ if __name__ == "__main__":
         else:
             for car in a[1:] or ["205a1N"]:
                 pair_report(car)
-    else:
+    elif a[0] == "PAIRS":
+        xyz = "--xyz" in a
+        for car in [x for x in a[1:] if not x.startswith("--")] or ["205a1N"]:
+            T, tex = parse(os.path.join(DEFAULT_CARS, car + ".c3d"))
+            body = Counter(t["tex"] for t in T).most_common(1)[0][0]
+            print(f"# {car}  body texture[{body}]={tex[body]}  every matched mirrored pair")
+            for t, u, pairs in matched_pairs(T, body):
+                cz, uz = centroid(t)[2], centroid(u)[2]
+                for i, j in pairs:
+                    a_, b_ = t["uv"][i]
+                    c_, d_ = u["uv"][j]
+                    extra = ""
+                    if xyz:
+                        p_, q_ = t["pos"][i], u["pos"][j]
+                        extra = (f"   P=({p_[0]:+.3f},{p_[1]:+.3f},{p_[2]:+.3f})"
+                                 f"  P'=({q_[0]:+.3f},{q_[1]:+.3f},{q_[2]:+.3f})")
+                    print(f"  {t['part']:14s} z={cz:+.3f} uv=({a_:.3f},{b_:.3f})"
+                          f"  <->  {u['part']:14s} z={uz:+.3f} uv=({c_:.3f},{d_:.3f})"
+                          f"   u_same={abs(a_ - c_) < 3e-3} v_comp={abs(b_ - (1 - d_)) < 3e-3}{extra}")
+    elif a[0] == "CORPUS":
         corpus(a[1] if len(a) > 1 else DEFAULT_CARS)
+    else:
+        bodies_report(a[1] if len(a) > 1 else DEFAULT_CARS)

@@ -365,8 +365,9 @@ separately**.
 ### The two flanks carry the same `u` — measured
 
 The left and right flanks of a car are separate geometry in one mesh, and their
-livery is *not* mirrored in the UVs. Over the 23 body meshes, matching flank
-triangles against their `(x, y, -z)` mirror partners vertex by vertex:
+livery is *not* mirrored in the UVs. Over the 23 body meshes (the `*a1N`
+exterior car files — `tools/flank_mirror.py BODIES`), matching flank triangles
+against their `(x, y, -z)` mirror partners vertex by vertex:
 
 ```
 same u at the mirrored vertices : 2025 pairs
@@ -382,12 +383,15 @@ Example, `seaa1N` (Seat) front side panel — mirrored vertices carry identical
 
 The body texture's two halves are vertical mirrors of each other (NCC 0.845 for
 band `v[0.79,0.88]` against `flipud` of band `v[0.12,0.21]`, -0.152 against
-`fliplr`), so `v' = 1-v` lands both flanks on the same artwork, upright, and the
+`fliplr`; re-measured 2026-10-10 through `tools/flank_art.py` on a fresh
+`TEXDUMP` of `seaa1N`, which gives **+0.816 / -0.176** — same relation, a
+different viewer build's decode), so `v' = 1-v` lands both flanks on the same artwork, upright, and the
 only difference left is the horizontal sense. **The livery therefore reads one
 way round on one flank and mirrored on the other — in the game's own data**, and
 the engine draws it that way (`Game_DrawMeshTextureRuns` binds the triangle's own
 texture; the node's world matrix is the only transform). Counts:
-`tools/flank_mirror.py`, and progress.md §0a.
+`tools/flank_mirror.py` (2025 / 1 / 425 over those 23; the 1 is a `u` wrap seam,
+not a mirrored island) and `tools/flank_art.py`, and progress.md §0a.
 
 ---
 
