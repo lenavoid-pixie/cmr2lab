@@ -25,7 +25,7 @@ Paths, so they line up on both ends:
 |---|---|
 | the install | `~/lena/.lena_cmr2/game` (2.26 GB retail PC install; 259 `.c3d`, 220 car containers) |
 
-## 0a. THE MIRRORED FLANK — CLOSED. added 2026-10-10 18:27 EEST (commit `51890a4` — `49d45ad` before the rebase onto `origin/main`; the block below first said 18:35, which is later than the commit that carried it — corrected in the re-verification pass)
+## 0a. THE MIRRORED FLANK — CLOSED. added 2026-10-10 18:27 EEST — cited by *subject*, not by hash, because this repo is rebased onto `origin/main` under it: `git log --oneline --grep='flank mirroring'` finds it (it said 18:35 EEST here at first, later than the commit that carried it; corrected in the re-verification pass)
 
 **Question, from the phone, and nobody else's queue:** in the 4-car frame and the
 single 205 frame the decals on one flank read correctly and the lettering on the
@@ -54,6 +54,13 @@ textures, one row of the sample vertex table that was a mis-paired vertex, and t
 header time. `tools/flank_mirror.py` grew a `BODIES` mode and a `PAIRS` dump so the
 headline numbers now reproduce **verbatim** from the command list, which the earlier
 list did not actually do.
+
+Commits, if a hash is wanted: `git log --oneline --grep='flank mirroring'` gives the
+two round-1 commits and `--grep='mirror-flank: re-verified'` the round-2 one. Hashes
+moved twice while this block was being written (an earlier draft cited `49d45ad`,
+which no branch points at now) because another session is pushing to `main` — hence
+the subjects above. `git ls-remote origin refs/heads/main` is the check that a push
+landed.
 
 ### The three questions the phone asked, answered in order
 
