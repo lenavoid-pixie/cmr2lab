@@ -25,6 +25,67 @@ Paths, so they line up on both ends:
 |---|---|
 | the install | `~/lena/.lena_cmr2/game` (**638 MB** retail PC install; 259 `.c3d`, 220 car containers. It said 2.26 GB here — that was the disc-image copies in `gamedata/`, corrected §0b/§6) |
 
+## 0e. A STAGE IS REACHED — the frontend hands off and the game loads and runs one. added 2026-10-11 00:1x EEST by the `work/RACE` worker; appended, nothing above it touched
+
+**The wall every previous round hit is down, and it was two walls, one behind the
+other. This block corrects the line "it does not yet draw a *track*, a *car you can
+drive*, or a *menu you can click on*": the game now loads a stage off disk and runs
+it. It still does not draw a road.**
+
+**The crash was not the game.** `cmr2` hung the GPU's graphics ring ~30 s into every
+run and the kernel reset the whole GPU, thirteen times on the 10th. Two lifetime
+bugs in our own `rhi/a7_vk32.c` (a texture image freed with no device wait; the
+frame's own command buffer re-recorded while in flight). 6 edits, measured A/B on
+the **kernel log**: unpatched +1 reset per run, patched **0** in 95 s / 165 s runs
+(`work/RACE/GPU-RESET-FINDING.md`). Since then: **0 ring timeouts across five
+further runs tonight.**
+
+**With that gone, the frontend walks itself to a stage.** No input beyond one
+keypress to clear the legal notice: `FrontendMenu_UpdateMain` fires **30.5 s** after
+the main menu is entered, builds the DEMO profile, switches the game to in-race
+mode, and:
+
+```
+[STAGE] Race_LoadSelectedStage entered
+[STAGE] stage file '.\\Game\\Tracks\\KENYA\\KENlot.bfl': didFileLoad=1 size=2400320
+[STAGE] Race_LoadSelectedStage -> 1
+```
+
+That is the retail game's own stage loader returning 1 with a real stage file
+(**Kenya, 2.4 MB**). The in-race machine then runs, and it is **live**: its race
+loop advances `0 → 1063` updates in 44 s (~25 Hz), one car in the order, race flag
+set, still advancing when the run was cut.
+
+**And the draw picture flips completely at the handoff** (census every 300 frames,
+`DECK_DD7_CENSUS=1`):
+
+| phase | mesh-FVF `0x2d2` draws /frame | `DrawIndexedPrimitiveVB` /frame | triangles /frame | 2D TL /frame | ignoredStates /frame |
+|---|---|---|---|---|---|
+| frontend | **0** | 0 | 694 | 336 | 48 |
+| **stage running** | **229 – 289** | **162 – 208** | **3 867 – 4 591** | **5** | **896 – 1 171** |
+
+Whole-run mesh-FVF totals: **618,958 / 979,739 / 1,069,996** in three runs, against
+**0** in every frontend-only run this project has taken, `refused_by_backend=0`.
+The 3D path is driven by the game's own stage camera, every frame.
+
+**The wall that remains, and its family.** What reaches the swapchain is the
+backdrop colour with a large animated garbled region — no terrain. The number that
+names it: **ignoredStates 48/frame → ~1,100/frame, 20×**, i.e. the dropped
+render-state set (S2a: `COLORVERTEX`, the material sources, TSS
+`TEXCOORDINDEX`/`TEXTURETRANSFORMFLAGS`/`MIPFILTER`/`MAXMIPLEVEL`) is now being fed
+by the **stage** instead of only by the frontend. Same family as S2a. Not the GPU
+family — that one is closed. Separately: the demo car sits in call state 8 (take
+controls from the player) instead of 9 (attract-mode AI), so nothing drives it yet.
+
+**Method, because it is the reusable part.** Game state cannot be inferred from a
+draw count — "no mesh draw", "the key never arrived" and "the menu never moved" are
+identical from outside. So this round put a gated trace **inside the game's own
+code** (20 one-liners, `DECK_FE_TRACE=1`, no logic touched): frontend menu state,
+every stage-lifecycle entry with `Race_LoadSelectedStage`'s return value, resource
+mode changes, the in-race machine's state/level, every successful state promotion
+with the value that caused it, and the race loop's own counters.
+`work/RACE/patch_fetrace{,2,3}.py`, report `work/RACE/STAGE-REACHED.md`.
+
 ## 0c. S2 MEASURED — THE STATE TRACKER IS NOT THE MOUNTAIN. added 2026-10-10 19:0x EEST by the `seq-s2-first` worker; appended, nothing below it touched except the two §6 lines marked CORRECTION
 
 **The phone's call was "S2 before P2". Agreed — and the measurement changes what
