@@ -125,7 +125,13 @@ binary until it lands. Then both lanes stay real.
 
 **Not done, on purpose:** no dropped state was implemented this round (they get
 implemented against the census, not against a screenshot), and no attempt to
-finish the menu navigation. Full evidence, raw logs and the two supporting fixes
+finish the menu navigation. **One path correction, since every command in the reports above uses it:** the port
+working tree is `~/lena/.lena_cmr2/` — with the `lena/` in it. Two older lines in this
+file write it as `~/.lena_cmr2` and that path **does not exist**; a command copied
+from them fails with "No such file or directory" and looks like the tree was deleted.
+It is not: `ls ~/lena/.lena_cmr2/port/rhi/`.
+
+Full evidence, raw logs and the two supporting fixes
 (`a7_vk32.h` was missing `extern "C"`; the device's own `draws` counter only
 counted one of the four draw entry points): `work/S2/README.md`.
 

@@ -32,7 +32,7 @@ texture-stage state, per FVF, and dumps it periodically and at exit
 `a7_last_error` with each dump, so a refused draw cannot hide.
 
 * patch: `work/S2/patch_census.py` (idempotent, per-file backup)
-* run:   `cd ~/.lena_cmr2/game && DECK_DD7_CENSUS=1 DECK_DD7_CENSUS_EVERY=200 \
+* run:   `cd ~/lena/.lena_cmr2/game && DECK_DD7_CENSUS=1 DECK_DD7_CENSUS_EVERY=200 \
           /home/deck/lena/work/S2/build/cmr2`
 * two supporting fixes found on the way, both real:
   1. `api7`'s port-side header `a7_vk32.h` declared its C functions **without
@@ -223,4 +223,4 @@ So S2 splits:
 | the drive attempt | `work/S2/s2_drive.py` |
 | raw runs | `/tmp/s2run.log` (28 s), `/tmp/s2run2.log` (20 s), `/tmp/s2-drive.log` |
 | game binary used | `work/S2/build/cmr2` (i386, link exit 0) |
-| device source | `~/.lena_cmr2/port/rhi/deck_dd7.cpp` (+ `.bak-pre-census-*`) |
+| device source | `~/lena/.lena_cmr2/port/rhi/deck_dd7.cpp` (+ `.bak-pre-census-*`) |
