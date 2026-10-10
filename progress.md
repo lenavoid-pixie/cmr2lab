@@ -58,6 +58,9 @@ Read §0 as mine, dated, and everything below as the previous worker's.
   completed, **0 cars with anything wrong**, 123,127 triangles, 3,873 runs, median
   15 runs per car, 0 runs refused. Slot roles are the same across four
   manufacturers and the dimensions land at 3.7–4.2 m by 1.4–1.5 m.
+- **The textures in the frame are byte-exact against an independent decoder**:
+  `tools/tex_verify.py` (Python, from the specs) vs the C viewer's own decode over
+  the four cars in the pictures — `blocks compared: 108   mismatches: 0`.
 - **Colour is not swapped** (the check that makes a render trustworthy): the car's
   mean colour in the frame matches that car's own body texture in channel order on
   all three cars tested, including the blue Impreza and the blue Metro 6R4.

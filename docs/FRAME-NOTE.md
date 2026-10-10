@@ -69,6 +69,21 @@ wrong this morning:
    transparent; drawn opaque it blacked out the windows. With the game's own
    alpha test and blend pair the glass and the light pods read correctly.
 
+### The textures in these frames are byte-exact against an independent decoder
+
+`tools/tex_verify.py` re-implements the container, the BC3/BC1 block decode and the
+TGA decoder from the specs in Python, and diffs them byte for byte against what the
+C viewer's own decoder produces (`TEXDUMP=DIR`). Over the four cars in these
+pictures — 205a1N, foca1N, ia1a1N, 6r4a1N:
+
+```
+blocks compared: 108   mismatches: 0
+```
+
+(108 = the blocks those four cars actually reference; the `.bfl` also carries
+textures no car in the set names, and those are skipped, not silently passed.)
+
+
 ## 3b. THE TEXTURE FIX, MEASURED — not "it looks better"
 
 `NAMETEX=1` renders the frame through the **old** name-matched guess, so the two
