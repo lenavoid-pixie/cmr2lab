@@ -1,0 +1,17 @@
+# I  ADVANCED, TRIGGER_L_DEADZONE=3000 -- the trigger being swept   axis=ABS_Z   DECK_PAD_TIER=advanced DECK_PAD_TRIGGER_L_DEADZONE=3000
+injected	game value	% full
+0	0	0.0%
+3	0	0.0%
+5	0	0.0%
+6	0	0.0%
+10	0	0.0%
+20	0	0.0%
+40	0	0.0%
+60	0	0.0%
+76	0	0.0%
+77	65	0.1%
+90	4849	7.4%
+128	18808	28.7%
+200	45285	69.1%
+255	65536	100.0%
+# 14 of 14 injections produced a reading

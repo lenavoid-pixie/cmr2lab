@@ -1,0 +1,109 @@
+[WIN] display size 1280x800 measured from X (:0, screen 0)
+[KB] evdev: /dev/input/event17: Permission denied (this process cannot read it)
+[KB] evdev: /dev/input/event16: Permission denied (this process cannot read it)
+[KB] evdev: /dev/input/event15: Permission denied (this process cannot read it)
+[KB] evdev: /dev/input/event14: Permission denied (this process cannot read it)
+[KB] evdev: /dev/input/event13: Permission denied (this process cannot read it)
+[KB] evdev: /dev/input/event12: Permission denied (this process cannot read it)
+[KB] evdev: /dev/input/event8: Permission denied (this process cannot read it)
+[KB] evdev: /dev/input/event5: Permission denied (this process cannot read it)
+[KB] evdev: /dev/input/event7: Permission denied (this process cannot read it)
+[KB] evdev: /dev/input/event4 'Valve Software Steam Deck Controller' score=9 -- OPEN (keys arrive without X focus)
+[KB] evdev: /dev/input/event6: Permission denied (this process cannot read it)
+[KB] evdev: /dev/input/event3 'AT Translated Set 2 keyboard' score=9 -- OPEN (keys arrive without X focus)
+[KB] evdev: 2 keyboard device(s) open -- physical keys reach the game with no window, no focus and no X server in between
+[DIN +54799.811] pad(sdl): SDL 3.4.18 gamepad subsystem up
+[DIN +54799.812] pad(sdl): 'Xbox 360 Controller' type=Xbox 360 id=2 path=/dev/input/event11
+[DIN] CreateDevice guid=0x6f1d2b61 0000d5a0 000011cf 000000bf
+[DIN] CreateDevice guid=0x6f1d2b60 0000d5a0 000011cf 000000bf
+[DIN] CreateDevice guid=0x6f1d2b70 0000d5a0 000011cf 000000bf
+[DIN +54799.817] axis prop: range axis=0 -> 65536
+[DIN +54799.817] axis prop: deadzone axis=0 -> 200
+[DIN +54799.817] axis prop: saturation axis=0 -> 10000
+[DIN +54799.817] axis prop: range axis=1 -> 65536
+[DIN +54799.817] axis prop: deadzone axis=1 -> 200
+[DIN +54799.817] axis prop: saturation axis=1 -> 10000
+[DIN +54799.817] axis prop: range axis=2 -> 65536
+[DIN +54799.817] axis prop: deadzone axis=2 -> 200
+[DIN +54799.817] axis prop: saturation axis=2 -> 10000
+[DIN +54799.817] axis prop: range axis=3 -> 65536
+[DIN +54799.817] axis prop: deadzone axis=3 -> 200
+[DIN +54799.817] axis prop: saturation axis=3 -> 10000
+[DIN +54799.817] axis prop: range axis=4 -> 65536
+[DIN +54799.817] axis prop: deadzone axis=4 -> 200
+[DIN +54799.817] axis prop: saturation axis=4 -> 10000
+[DIN +54799.817] axis prop: range axis=5 -> 65536
+[DIN +54799.817] axis prop: deadzone axis=5 -> 200
+[DIN +54799.817] axis prop: saturation axis=5 -> 10000
+[DIN +54799.817] axis prop: range axis=6 -> 65536
+[DIN +54799.817] axis prop: deadzone axis=6 -> 200
+[DIN +54799.817] axis prop: saturation axis=6 -> 10000
+[DIN +54799.817] axis prop: range axis=7 -> 65536
+[DIN +54799.817] axis prop: deadzone axis=7 -> 200
+[DIN +54799.817] axis prop: saturation axis=7 -> 10000
+[MSGBOX #1] : Setting configuration to defaults
+[MSGBOX-CALLER #1]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0xb42633]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x5768c7]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x553789]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x55ab91]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x55a7a9]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x5597dd]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x651c1c]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x6519a7]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0xb2d794]
+/usr/lib32/libc.so.6(+0x22640) [0xf7a7b640]
+[GRAPHICS] SetDefaults: 1280x800 x32 (the display, measured)
+[A7VK] 1280x800 is the whole display: asking for _NET_WM_STATE_FULLSCREEN
+[A7VK] RESOLUTION at startup: asked 1280x800 | swapchain 1280x800 (= the output) | window 1280x800+0+0 as the WM made it | display 1280x800
+[A7VK] RESOLUTION at startup: 1:1 with the display -- no scale, no letterbox, no border
+[DD7] CreateDevice -> RHI up (1280x800); light enum = DX5-numbered (DIRECTIONAL=3), translated by name
+[KB] keyboard window 0x4000001 attached by name; X input focus = 0x4000001 -> ours (keys arrive without a click)
+[DIN +54800.969] first GetDeviceState on kind=0 (keyboard) cb=256
+[DIN +54800.969] first GetDeviceState on kind=2 (joystick) cb=272
+[DIN +54800.969] joy axes lX=0 lY(pedal)=0 lZ(L2)=0 lRx=0 lRy=0 lRz(R2)=0 hat=(0,0)
+[A7VK] RESOLUTION after the WM settled: asked 1280x800 | swapchain 1280x800 (= the output) | window 1280x800+0+0 as the WM made it | display 1280x800
+[A7VK] RESOLUTION after the WM settled: 1:1 with the display -- no scale, no letterbox, no border
+[DIN +54807.597] joy axes lX=65 lY(pedal)=0 lZ(L2)=0 lRx=0 lRy=0 lRz(R2)=0 hat=(0,0)
+[DIN +54808.349] joy axes lX=458 lY(pedal)=0 lZ(L2)=0 lRx=0 lRy=0 lRz(R2)=0 hat=(0,0)
+[DIN +54809.099] joy axes lX=655 lY(pedal)=0 lZ(L2)=0 lRx=0 lRy=0 lRz(R2)=0 hat=(0,0)
+[DIN +54809.865] joy axes lX=2686 lY(pedal)=0 lZ(L2)=0 lRx=0 lRy=0 lRz(R2)=0 hat=(0,0)
+[DIN +54810.615] joy axes lX=6815 lY(pedal)=0 lZ(L2)=0 lRx=0 lRy=0 lRz(R2)=0 hat=(0,0)
+[MSGBOX #2] CMR2 File Load Error: Make sure the CMR2 CD is in the CD drive
+[MSGBOX-CALLER #2]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0xb42633]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x6507f0]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x43dec6]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x43dd88]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x5568d9]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x55ab91]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x55a7a9]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x5597dd]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x651c1c]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x6519a7]
+[MSGBOX #3] CMR2 File Load Error: Make sure the CMR2 CD is in the CD drive
+[MSGBOX-CALLER #3]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0xb42633]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x6507f0]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x43dec6]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x43dd88]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x5569ba]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x55ab91]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x55a7a9]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x5597dd]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x651c1c]
+/home/deck/lena/work/PADTUNE/out-ref/cmr2() [0x6519a7]
+[DIN +54811.365] joy axes lX=10878 lY(pedal)=0 lZ(L2)=0 lRx=0 lRy=0 lRz(R2)=0 hat=(0,0)
+[DIN +54812.116] joy axes lX=14942 lY(pedal)=0 lZ(L2)=0 lRx=0 lRy=0 lRz(R2)=0 hat=(0,0)
+[DIN +54812.975] joy axes lX=16973 lY(pedal)=0 lZ(L2)=0 lRx=0 lRy=0 lRz(R2)=0 hat=(0,0)
+[DIN +54813.616] joy axes lX=18612 lY(pedal)=0 lZ(L2)=0 lRx=0 lRy=0 lRz(R2)=0 hat=(0,0)
+[DIN +54814.366] scancode 0xcd DIK_key DOWN
+[DIN +54814.366] joy axes lX=19005 lY(pedal)=0 lZ(L2)=0 lRx=0 lRy=0 lRz(R2)=0 hat=(0,0)
+[DIN +54815.116] joy axes lX=23134 lY(pedal)=0 lZ(L2)=0 lRx=0 lRy=0 lRz(R2)=0 hat=(0,0)
+[DIN +54815.866] joy axes lX=31260 lY(pedal)=0 lZ(L2)=0 lRx=0 lRy=0 lRz(R2)=0 hat=(0,0)
+[DIN +54816.617] joy axes lX=39452 lY(pedal)=0 lZ(L2)=0 lRx=0 lRy=0 lRz(R2)=0 hat=(0,0)
+[DIN +54817.367] joy axes lX=47579 lY(pedal)=0 lZ(L2)=0 lRx=0 lRy=0 lRz(R2)=0 hat=(0,0)
+[DIN +54818.118] joy axes lX=55771 lY(pedal)=0 lZ(L2)=0 lRx=0 lRy=0 lRz(R2)=0 hat=(0,0)
+[DIN +54818.885] joy axes lX=65536 lY(pedal)=0 lZ(L2)=0 lRx=0 lRy=0 lRz(R2)=0 hat=(0,0)
+[DIN +54819.635] scancode 0xcd DIK_key UP
+[DIN +54819.635] joy axes lX=0 lY(pedal)=0 lZ(L2)=0 lRx=0 lRy=0 lRz(R2)=0 hat=(0,0)

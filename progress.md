@@ -842,3 +842,111 @@ once by a test harness of mine.
   A worker stuck inside one long `gdb` run keeps `status.json` ticking. `running_for`
   growing with `last_done` frozen is the pair to watch.
 
+
+## 0d. THE TUNING SEAM AND THE TWO CONTROLLER TIERS — added 2026-10-10 20:25 EEST by the `padtune` worker; appended, nothing above it touched
+
+**The job.** Phone-Lena relayed Miami's controller-feel message: two tiers, EZ and
+ADVANCED, both required, with his own constraint quoted in it — *"I don't want to make it too
+confusing."* The brief was explicit that this is **not** a settings menu: it is the question
+of whether the open input layer makes tuning possible or impossible, plus a status statement
+for three parked items. Lane: `work/PADTUNE/`, checkpoint beside it.
+
+### What was found, and it is the fact the design rests on
+
+**The car adds no shaping of its own.** `StageObjects.cpp:12707-12718` reads the steering
+axis and scales it linearly — `FixMulShift32(half, 0x3f0000)` — with no dead zone, no curve,
+no saturation and no threshold; the throttle/brake path below it (`12728-12746`) is the same
+shape. So every dead zone, curve and saturation the car will ever feel is applied on the way
+out of the input layer or it does not exist in the program. Read from the decompilation, with
+line numbers.
+
+### What was built
+
+`platform/deck_dinput.cpp`, one edit (md5 `51523520bc49f31d490eda8a7a0e52ad`; backup
+`deck_dinput.cpp.bak-pre-padtune`, md5 `8adf8f0000ca563e069bc9366bc5e006` — the exact file
+the INPUTGEN lane published, so there was no drift to reconcile). The seam was already two
+functions wide and is now named as one: `axis_scaled()` for every analogue value, and
+`deck_pedal_axis()` for the game's single combined pedal axis, which is literally
+`axis_scaled(L2) - axis_scaled(R2)` — so per-trigger shaping reaches the pedal by construction.
+`PadTune` + `pad_tune_ez()` + `pad_tune_for()` + the knob table + an integer response curve
+(no `pow()`, no float: a float whose result depended on FPU flags would let two builds of the
+same source disagree about the car's steering). Both builds compile, link exit 0.
+
+### What was measured — EZ changes nothing, and a tuning screen cannot reach it
+
+Synthetic Xbox 360 pad driving the real game binary, read back through the port's own trace at
+a new `DECK_DIN_TRACE=4` (any change, not only changes over 0.4 % — without it a dead zone edge
+cannot be resolved at all). The readback waits for the trace to go quiet; a fixed sleep read a
+value one injection stale and that was caught and removed rather than reported.
+
+| | |
+|---|---|
+| **EZ vs a reference build of the pre-seam source**, 18-point steering sweep | **identical, 18 of 18** |
+| **EZ with every advanced knob set to something wild** | **identical, 18 of 18** — in EZ the code returns before it reads a knob |
+| steering dead zone 30 % | zero to 2000, knee between 8000 and 9000 (30 % of travel is 9830 of 32767) |
+| steering saturation 50 % | full lock at 20000 = half travel, dead flat after |
+| left trigger dead zone 30 % | zero to 76, then 77 → 65 (30 % of 255 = 76.5) |
+| the **right** trigger's dead zone knob, sweeping the **left** trigger | byte-identical to the untuned sweep |
+
+The last pair is the per-trigger claim. **The canonical binary was deliberately NOT relinked**
+— unlike last round, this change is opt-in by construction and EZ is bit-identical, so nothing
+is broken by its absence and relinking would invalidate the binary S2 measured its census
+against. The one line that does it is in the checkpoint.
+
+### The three parked items — stated, NOT started
+
+Same message. **No part of any of them was begun.** Two of the three (crowds, trees) were
+already written into `docs/WHERE-THIS-IS-GOING.md` by the 19:57 doc commits — the brief's
+trailer was true and *my local clone was behind*; I had re-derived that work before finding
+out and it was thrown away rather than merged. The third was missing and is now in: the
+overarching **"one GUI where you can choose the little bits and pieces"**, which is the port,
+the modkit, the toggles and the installer converging into one product — and which confirms the
+GUI installer is the **shape** of the project, not a wrapper on top of it.
+
+1. **Crowds and spectators.** The art is a data job (container cracked, repack verified
+   byte-identical). The *behaviour* he describes — running across the field, aware of the
+   track, taking pictures, waving — is a real new subsystem: per-spectator state and a
+   decision each. True 3D geometry replaces the billboard path. An **LOD question**, not a
+   "make it all 3D" question.
+2. **3D trees.** Same LOD answer: geometry near, impostors far. The billboards were a 2000
+   budget decision, not a mistake.
+3. **The overarching one** — *"from one GUI where you can choose the little bits and pieces."*
+   That is the port, the modkit, the toggles and the installer converging into one product,
+   and it confirms **the GUI installer is the shape of the project, not a wrapper on top of
+   it.** It also raises the stakes on the two-tier split: if depth is compulsory that GUI is a
+   wall of numbers, and if the default is correct the same GUI serves both people.
+
+### And one thing that needs a decision, because a document people trust is now wrong
+
+**`docs/CONTROLS.md` lost its decomp-sourced answers in commit `4fb2e27`** (2026-10-10 19:57,
+"controller feel — EZ tier and advanced tier"): 200 lines out, 46 in. Gone with them are the
+gear-up/gear-down answer read out of the string table and `Input.cpp:696`, the "there is no
+clutch, neutral is a gear value" finding, the automatic-gearbox rule, and the combined-pedal
+section. `git grep 'g_carButtonMasks' origin/main` now returns **nothing**.
+
+The problem is not the trim, it is the contradiction it left behind: the rewritten page says
+which button shifts up "has not been read yet", when it **had** been read, in that same file,
+one commit earlier (`5651627`).
+
+I did **not** revert her restructure — the page is its author's call and the restructure was
+deliberate. I added a short marked block under *What is still undecided* carrying the three
+answers and the citation, and pointing at `git show 5651627:docs/CONTROLS.md` for the full
+section. **If the citations are wanted back inline it is one revert of one section.** Say the
+word and it is done; flagging beats overruling.
+
+### Not true, and it belongs here rather than in §2
+
+- **No thumb has pressed the Deck's physical stick** — unchanged from §0c's neighbour, still
+  the same limit.
+- **No stage has been driven.** The curves are measured against the input layer, not against a
+  car. This is why **EZ contains the game's own numbers**: there is no stage to measure a
+  better dead zone on, and inventing one would be taste dressed up as engineering.
+  `pad_tune_ez()` is the single place that changes when there is something to change it with.
+- **No GUI was designed, and it was explicitly not the task.** What exists is the place a
+  GUI's numbers would land.
+- **Vibration is unimplemented and is NOT this seam.** It is the `IDirectInputEffect` path
+  (`Input.cpp:1795`, `1953`, `GUID_ConstantForce`); the device answers `CreateEffect()` with
+  `DIERR_UNSUPPORTED` on purpose.
+- **The trigger path has three thresholds, not one** — the game's 2 % dead zone, a 4 % pedal
+  gate and a 25 % key-mirror threshold. Collapsing them would change EZ, so they were made
+  visible and nameable instead. Written up in `docs/CONTROLS.md`.

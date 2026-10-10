@@ -67,3 +67,37 @@ that pad and maps it; the same path the synthetic pads take is the one feeding
 it) and not by a press; and a 32-bit SDL3 built **without** libudev sees zero
 joysticks on this machine, which is why the port's copy is built with it — see
 `third_party/sdl3-i386/README.md`.
+
+## `tune/` — the tuning seam and the two controller tiers
+
+The instruments behind `docs/CONTROLS.md` § *The tuning seam*, so those numbers can be
+re-made rather than believed. Same idea as the rest of this directory: nothing re-implements
+the shaping it is measuring — the readout is the port's own `DECK_DIN_TRACE` trace.
+
+| file | what it is |
+|---|---|
+| `patch_padtune.py` | the one edit to `platform/deck_dinput.cpp`. Anchored on exact strings, and it **refuses to apply** if the source has drifted from the md5 the INPUTGEN lane published. `--check` reports without changing anything |
+| `sweep.py` | injects an axis sweep into a synthetic pad, **waits for the trace to go quiet** before recording, and reads back what the input layer hands the game |
+| `run_sweeps.sh` | runs A–J in the order they are quoted in the docs (~5 min) |
+| `*.txt` / `*.raw` | the recorded tables and the raw traces |
+
+Reading them, in order:
+
+* `old-ez` is the **reference** — the pre-seam source built with the same trace level, so the
+  instrument is identical and only the behaviour can differ — against `new-ez` and
+  `new-ez-knobs`. The three are **identical, 18 of 18**, including with every advanced knob
+  set to something wild. That is the EZ claim.
+* `adv-dz3000`, `adv-curve180`, `adv-curve30`, `adv-sat5000` are the knobs doing what they say.
+* `trig-ez` / `trig-l-dz3000` / `trig-r-dz3000` are the per-trigger claim: same sweep, same
+  binary, one knob moved and the swept axis responds, the other knob moved and it does not.
+
+Two things the harness had to get right, both learned the hard way and both worth keeping:
+the game polls the joystick on **its own schedule**, so a fixed settle reads a value one
+injection stale and that stale-vs-fresh difference is pure timing, not a result; and the
+default trace threshold (0.4 % of full scale) **cannot resolve a dead zone edge**, because a
+value coming off zero is by definition small. `DECK_DIN_TRACE=4` fixes the second, waiting
+for quiet fixes the first.
+
+The reference binary (`out-ref/cmr2`) is not published — it is 33 MB and it is one command to
+rebuild: revert `deck_dinput.cpp` to `deck_dinput.cpp.bak-pre-padtune`, apply only the
+`DECK_DIN_TRACE=4` hunk, and link.

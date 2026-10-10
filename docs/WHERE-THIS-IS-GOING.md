@@ -39,6 +39,19 @@ by construction. Write it narrowly instead and adding them later is a rewrite.
 **This one is not "later".** The input layer is being written now, which makes it an
 architectural decision rather than a feature request.
 
+**Status, 2026-10-10: the foundation exists, the feature does not.** The input layer now reads
+pads through SDL's gamepad API, so an Xbox pad, a DualSense, a Switch Pro pad and the Deck's
+own controls all arrive in one vocabulary by construction. What a player would notice —
+driving with those buttons — is still not wired, and the Deck's physical controls have never
+been pressed by a test, so that part is verified structurally rather than by a thumb.
+
+**And controller *feel* now has a seam to live in.** The tiers described in `docs/CONTROLS.md`
+are implemented in that same input layer: EZ is the default, and it is measured bit-identical
+to the port as it shipped — including with every advanced knob set to something wild, because
+in EZ the code returns before it reads one. The depth is real and it is behind the default,
+which is what makes the "one GUI" below possible rather than a wall of numbers. Details and
+numbers: `docs/CONTROLS.md`, `work/PADTUNE/`.
+
 ### Wheel support
 
 **Axes and pedals: probably straightforward.** SDL exposes wheels, and the game already
@@ -100,6 +113,32 @@ a project of its own.
 **One honest caveat:** art ripped out of another commercial game is not something anyone can
 redistribute. Using it on a copy you own is your business; putting it in a release is not.
 That line gets stated plainly rather than hand-waved.
+
+---
+
+## The one that is not a feature: one GUI, and it is the shape of the project
+
+From the same conversation as the crowds, and it is the largest thing said in it:
+
+> *"re-master it... and make it public... from one GUI where you can choose the little bits
+> and pieces."*
+
+That is not a fourth item on a list. It is the **port, the modkit, the feature toggles and the
+installer converging into one product**, and it settles a question that has been implicit since
+the first version of this page: **the GUI installer is the shape of this project, not a wrapper
+on top of it.** Every feature here — the controller tiers, the camera tab, the gauges, the
+crowds, the trees — ends up as a control in that one place, and each one is only as shippable
+as its defaults are good.
+
+Which is why the two-tier split matters beyond controller feel. If depth is compulsory, that
+GUI is a wall of numbers and the port is a simulator somebody has to configure before they can
+drive. If the default is correct and the depth sits behind it, the same GUI serves a person who
+wants to race and a person who wants to adjust — and the owner gets both of his sentences at
+once, the one at the top of this page and the one about not making it too confusing.
+
+**Not started, and deliberately not designed here.** What exists is the seam a GUI's numbers
+would land in, and the contract it has to honour: one choice that is correct, and depth behind
+it.
 
 ---
 
