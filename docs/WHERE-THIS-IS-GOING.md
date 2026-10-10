@@ -23,7 +23,7 @@ how the original drives unless you ask it to.
 
 ---
 
-## The four things on the list
+## The things on the list
 
 Each one gets an honest split: what's actually hard, and what only looks hard.
 
