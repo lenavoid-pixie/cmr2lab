@@ -19,7 +19,146 @@ Paths, so they line up on both ends:
 
 | short name | real path on the Deck |
 |---|---|
-| the ins## 0. THE FRAME MIAMI ASKED FOR — added 2026-10-10 15:15 EEST by the worker on
+| the install | `~/lena/.lena_cmr2/game` (2.26 GB retail PC install; 259 `.c3d`, 220 car containers) |
+
+## 0a. THE MIRRORED FLANK — CLOSED. added 2026-10-10 18:35 EEST
+
+**Question, from the phone, and nobody else's queue:** in the 4-car frame and the
+single 205 frame the decals on one flank read correctly and the lettering on the
+other looks MIRRORED. Is that faithful to the original game, or is it a bug in our
+texture binding?
+
+**ANSWER: FAITHFUL. It is in the file, and the engine draws the file. Not a
+binding bug. Closed — no fix, and a "fix" would be a regression.**
+
+**This block, too, is appended by a worker who is not the author of the rest of
+this file.** Everything below §0a is carried forward untouched. The one edit I
+made outside this block: the path table above had lost its last row into the §0
+heading; I completed that row with the install path I actually measured against
+(`~/lena/.lena_cmr2/game`), which is all it was missing.
+
+### The three questions the phone asked, answered in order
+
+**1. Does the engine mirror a body panel?** No — and there is no code path that
+could. `Game_DrawMeshTextureRuns` (CMR2 `0x0049c510`) walks the mesh's own
+triangle list and, per triangle, binds
+`*(int *)((BYTE *)pTri + 4 + pTri->field_0x2c * 4)` — the file's own texture
+index — then `DrawIndexedPrimitiveVB(D3DPT_TRIANGLELIST, ...)`. The only
+transform applied to the vertex data is the node's world matrix
+(`SetTransform(D3DTRANSFORMSTATE_WORLD, pNode->worldF)`, `Game_DrawViewMaskNode`
+`0x0049cad0`; `Graphics_DrawMeshLOD` `0x0049c940` is the wrapper). No UV
+transform, no per-side texture selection, no mirror flag on a mesh.
+The engine's *only* mirror is `StageObject_RebuildMirroredTiltMatrix`
+(`0x00486910`), and reading its basis swap — `right' = forward`,
+`forward' = -right`, `up' = up` — gives determinant **+1**: it is a 180° rotation
+about the up axis, **not** a reflection, and it is used for view/camera records.
+The car's own wheel nodes in the file are that same rotation
+(`205a1N` nodes 1–4: `diag(-1,1,-1)`, translation ±0.717/±0.718 in z), which is
+how a wheel is placed on the other side without flipping anything.
+
+**2. Is the left flank a mirrored instance of the right?** No. Both flanks are
+real, separately tessellated geometry in the same file, under identity scene
+nodes. `205a1N`: the body parts span z ∈ [-0.88, +0.88] with triangles on both
+sides (`08BodySim` 101 faces at z>0.3, 83 at z<-0.3; `08BodySim` has V=247, an
+odd count — the two flanks are not copies). Every body part's node is the
+identity matrix, so the mesh data *is* the world data for panels.
+
+**3. Is there a distinct LEFT texture in the trailer?** No — corpus-wide. Over
+the 259 `.c3d` in the install, **192/205 files with flank triangles use the
+*same* body/livery texture on both flanks** (measured: the texture with the most
+triangles is in both the left-flank and right-flank index sets). 0 files have a
+left-only body texture. The 43 files whose left/right *sets* differ do so by one
+underside / glass / single-panel index that my `|Nz| > 0.75` threshold caught on
+one side only; the body texture is in both sets on every one of them. So there is
+nothing for our binding to have got wrong: there is no second texture to bind.
+
+### What the data actually does, measured
+
+Mirrored triangle pairs (`(x,y,-z)`, matched vertex by vertex) over the 23 body
+meshes, comparing texture coordinates at the mirrored vertices:
+
+```
+flank triangle pairs with SAME u at the mirrored vertices : 2025   <-- the answer
+flank triangle pairs with u complemented (u' = 1-u)      :    1
+neither (different tessellation on the two flanks)       :  425
+```
+
+Per car, `seaa1N` is 90 / 1 / 13 and `205a1N` is 66 / 0 / 30 — and the pairs are
+exact, not approximate. One Seat Cordoba front-side-panel pair:
+
+```
+P=( 0.778, 0.175, -0.783)  uv=(0.727, 0.820)      P=( 0.778, 0.175, +0.783)  uv=(0.727, 0.180)
+P=( 0.176, 0.033, -0.835)  uv=(0.566, 0.857)      P=( 0.021, 0.035, +0.835)  uv=(0.524, 0.143)
+P=(-0.423, 0.215, -0.783)  uv=(0.405, 0.809)      P=(-0.423, 0.215, +0.783)  uv=(0.405, 0.191)
+```
+
+Same `x` ⇒ **same `u`** (0.727/0.727, 0.405/0.405), and `v` is the complement
+(0.820/0.180, 0.809/0.191 — `v' = 1 - v` to three decimals). So the livery's
+"along the car" coordinate runs the same way round the car on both flanks, and
+the texture's two halves are vertical mirrors of each other (normalised
+cross-correlation on that car's body texture, `seaa1N` `ASCDBoDf`, band
+`u[0.40,0.76] v[0.79,0.88]` against `u[0.40,0.76] v[0.12,0.21]`: **0.845 for
+`A` vs `flipud(B)`**, **-0.152 for `A` vs `fliplr(B)`**). The `v' = 1-v` mapping
+therefore lands both flanks on the same artwork, upright — and the only
+difference left is the horizontal sense. **Viewed from outside, one flank is the
+horizontally mirrored image of the other.** That is what the phone saw, and it is
+in the file.
+
+Two more measurements that close the escape routes:
+
+- **UV set 1 is UV set 0.** Every vertex of every part of `205a1N` (1,204
+  vertices), `foca1N` (1,144) and `6r4a1N` (1,360), 14 parts each: `uv1 == uv0`
+  exactly, 0 differing vertices. So there is no second UV set holding a "correct"
+  mapping that the game uses and the viewer does not. (The engine's only stage that reads the
+  second set is blend case 11, `TCI_CAMERASPACEREFLECTIONVECTOR` — an environment
+  map, not a livery.)
+- **Our own render agrees with the file.** Flat-lit flank views
+  (`AMB=1 GAIN=0 FILL=0 SHADOW=0 BG=0 OFFW=2000 OFFH=1000 ELEV=0 DIST=0.35`,
+  `YAW=0` and `180`, car `seaa1N`), OCR'd with `tesseract` (`afr` is the only
+  traineddata on this Deck): a competition number reads as **`OS`** (conf 82) in
+  the frame as rendered and as **`20`** (conf 94) only after a horizontal flip of
+  the frame; the other flank's text needs no flip. And the decals themselves are
+  stored reading normally in the texture — `seaa1N` `maxon` @(512,834), `MoviStar`
+  @(739,226); `cora1N` `MoviStar` @(748,252) and @(769,870); `6r4a1N`
+  `COMPUTERVISION` @(244,248); `foca1N` `Movista` @(196,455) — so the art is not
+  pre-mirrored anywhere in the texture; the mirroring is the *mapping*, not the
+  picture.
+
+### The honest limit
+
+The step from "the file mirrors one flank" to "the game mirrors one flank" is the
+engine's draw path (above), and it is a reading of the decomp, not a picture. The
+one measurement that would replace the argument with a photograph is running the
+retail game itself on a car-viewer screen and looking at both sides — the install
+is on this Deck and there is a launcher, but the port cannot draw a car yet (the
+D3D7 state tracker is still the M5 gap, §5/§6) and I did not fire the original game
+up for this. If that run ever contradicts this
+block, the block is wrong, not the run. But the game has no per-side texture to
+bind and no UV transform to apply, so I do not expect it to.
+
+### Do not "fix" it
+
+There is no local fix. A global u flip in the viewer would make the mirrored flank
+read and break the flank that already reads. The mirroring is a property of the
+shipped art: the left flank's islands are UV'd the same way round as the right's.
+The correct action is to record it and stop looking at it.
+
+**Reproduce, from this repo:**
+
+```
+python3 tools/flank_mirror.py PAIR seaa1N 205a1N     # the pair relation, per car
+python3 tools/flank_mirror.py PAIR --all             # all 23 body meshes
+python3 tools/flank_mirror.py CORPUS                 # 259 .c3d: textures + u direction
+```
+
+`tools/flank_mirror.py` (new, stdlib only, parses the container the same way
+`cmr2deck.c` does) prints exactly the numbers above. The corpus line
+`du/dx sign over outer flank triangles L+: 5843 L-: 887 R+: 5948 R-: 1114 / cars
+whose two flanks run u the same way: 181 (opposite: 11)` is the same finding as
+the 2025/1 pair count from the other direction: the 11 "opposite" files are all
+small non-body files (`*a5` / `*c5`, 1–3 flank triangles each), not bodies.
+
+## 0. THE FRAME MIAMI ASKED FOR — added 2026-10-10 15:15 EEST by the worker on
 ## the "make the port a pretty thing to look at" job.
 
 **This block is APPENDED BY A DIFFERENT WORKER, at the top, on purpose.** The rest

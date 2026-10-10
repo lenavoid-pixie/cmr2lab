@@ -362,6 +362,33 @@ It is called as `(record, base+0)` and `(record, base+4)` for each `c18`
 record — so a `c18` record begins with **two pointers that are fixed up
 separately**.
 
+### The two flanks carry the same `u` — measured
+
+The left and right flanks of a car are separate geometry in one mesh, and their
+livery is *not* mirrored in the UVs. Over the 23 body meshes, matching flank
+triangles against their `(x, y, -z)` mirror partners vertex by vertex:
+
+```
+same u at the mirrored vertices : 2025 pairs
+u complemented (u' = 1-u)       :    1 pair
+```
+
+Example, `seaa1N` (Seat) front side panel — mirrored vertices carry identical
+`u` and complementary `v`:
+
+```
+(0.727, 0.820) <-> (0.727, 0.180)      (0.405, 0.809) <-> (0.405, 0.191)
+```
+
+The body texture's two halves are vertical mirrors of each other (NCC 0.845 for
+band `v[0.79,0.88]` against `flipud` of band `v[0.12,0.21]`, -0.152 against
+`fliplr`), so `v' = 1-v` lands both flanks on the same artwork, upright, and the
+only difference left is the horizontal sense. **The livery therefore reads one
+way round on one flank and mirrored on the other — in the game's own data**, and
+the engine draws it that way (`Game_DrawMeshTextureRuns` binds the triangle's own
+texture; the node's world matrix is the only transform). Counts:
+`tools/flank_mirror.py`, and progress.md §0a.
+
 ---
 
 ## Vertex encoding — methods that FAILED (do not retry blind)
