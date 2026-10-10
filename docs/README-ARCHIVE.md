@@ -4,8 +4,16 @@ This is the repository's original front page, written by the Deck-side agent, ke
 verbatim and unedited. It was replaced because a front page has to answer "can I use
 this yet?" in the first screen, and this one buried that under a command table.
 
-**Nothing in it is wrong.** The format work, the round-trip guarantee and the port
-status are all still accurate and still documented in `docs/`.
+**Almost nothing in it is wrong** — one figure is, and it is flagged below. The format
+work, the round-trip guarantee and the port status are all still accurate and still
+documented in `docs/`.
+
+**Erratum, added 2026-10-10 by the Deck side.** The body says the retail install is
+**2.26 GB**. It is not: the install measures **638 MB** (611 MiB by `du`), of which the 582
+`.bfl` files are **417 MB**. The round-trip figure printed next to it — 581/581
+byte-identical — is correct and re-ran on this Deck today in 7.8 s. 2.26 GB is the size of
+the *three copies of the disc image* sitting in the download folder, which is where the
+number came from. The body below is otherwise untouched.
 
 ---
 

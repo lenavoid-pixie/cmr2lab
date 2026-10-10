@@ -177,8 +177,9 @@ Linux equivalents is a large but mechanical part of the port.
 
 **`__asm`**
 Hand-written assembly language buried inside C++ code. Usually a porting nightmare — but
-here, all 36 occurrences sit inside `#ifdef _MSC_VER` blocks with portable fallbacks, so
-none of them are actually visible to a Linux compiler. A rare piece of good luck.
+here, all 35 blocks (a 36th mention is inside a comment) sit inside `#ifdef _MSC_VER` with
+portable `#else` fallbacks, so none of them are actually visible to a Linux compiler. A
+rare piece of good luck.
 
 **Direct3D 7 / D3D7**
 Microsoft's 1999 graphics API. What the game uses to draw. Long obsolete, which is why it

@@ -20,10 +20,15 @@ This project is the other route: **change the game so it speaks Linux directly.*
 
 That is a big job, and it is going well. The game's source code has been recovered from
 the shipped `.exe` — 122 files, 135,805 lines of C++ — and **half of it already compiles
-natively on a Steam Deck.** The renderer is being rewritten. It draws a car from the
-retail game files onto your screen using a real Vulkan window.
+natively on a Steam Deck.**
 
-It does not yet draw a *track*, a *car you can drive*, or a *menu you can click on*.
+It also draws a picture, and that sentence has to be exact: `screenshots/` holds real
+frames of a real car built from the retail game files, rendered on a Deck through Vulkan —
+but the **data** is the game's and the **draw code** is this project's own viewer. The
+game's own 3D path has not drawn anything yet; what the actual game binary draws today is
+its frontend, in 2D. `docs/FRAME-NOTE.md` says line by line which is which.
+
+So it does not yet draw a *track*, a *car you can drive*, or a *menu you can click on*.
 That is what's left.
 
 Separately — and available **right now** — this repo also contains tools that open the
@@ -65,7 +70,8 @@ same way. A keyboard and mouse help a lot, but the touchscreen and trackpads wor
 **Open the terminal.** In Desktop Mode there's an icon on the taskbar at the bottom
 called **Konsole** — a black square with a `>_` in it. Tap it. A black window opens
 with a blinking cursor. That's a terminal: you type a command, press Enter, it does
-the thing. Nothing you type here can break your Deck.
+the thing. A terminal does exactly what you tell it, so paste from this page rather than
+inventing commands — nothing in the block below can break anything.
 
 **Copy and paste this, one block at a time.** Tap the line, then paste, then Enter.
 (If you have no keyboard: long-press the terminal and pick *Paste*.)
@@ -134,14 +140,16 @@ $ ./cmr2lab repack /path/to/Colin\ McRae\ Rally\ 2.0
 repack VERIFY: 581/581 byte-identical   (skipped 1 non-container)
 ```
 
-581 containers, zero failures. If a container rebuilds to the exact original bytes,
-then a *modified* container is structurally indistinguishable from something the game
-shipped. That's the whole safety argument for editing your own copy.
+581 containers, 417 MB of container data, zero failures — re-run on a Deck on 2026-10-10
+in 7.8 seconds. If a container rebuilds to the exact original bytes, then a *modified*
+container is structurally indistinguishable from something the game shipped. That's the
+whole safety argument for editing your own copy.
 
-(An earlier version of this page quoted the install at 2.26 GB. That figure does not
-match measurement — a real retail install is 908 files and roughly 0.6 GB. The container
-count is measured; the size is not, so it is not stated. If you want to settle it, run
-`du -sh` on your own copy and open an issue.)
+(An earlier version of this page quoted the install at 2.26 GB, then withdrew the figure
+without replacing it. Both halves are now settled: **2.26 GB was the three copies of the
+disc image in the download folder** — 702.8 + 759.6 + 807.1 MB = 2.269 GB — not the game.
+A real retail install measures **907 files, 638 MB on disk** (611 MiB by `du`), and the 582
+`.bfl` files inside it are **417 MB**. Run `du -sh` on your own copy if you want to check.)
 
 ---
 
@@ -151,11 +159,18 @@ Read `docs/PORT-PLAN.md` first. It has the measurement method, the error census,
 explicit list of numbers this project published before running them and then had to
 withdraw — read that list before you quote anything.
 
+The decompiled source is **not in this repository.** It is a separate, public,
+GPL-licensed matching decompilation (`github.com/pablocpas/CMR2Decomp`); this repo ships
+only the tools used to measure it and the numbers that came out.
+
 **What compiles today:** 33 of 66 translation units on `x86_64-linux-gnu`; 66 of 66 on
-`i386-linux-gnu`. The i386 build is kept deliberately as a **diagnostic oracle**: a file
-that fails on x86_64 but passes on i386 is blocked by pointer width and nothing else.
-Right now that's all 33 of them — every remaining error is `cast from pointer to smaller
-type 'int'`.
+`i386-linux-gnu` — the second only with `-Wno-c++11-narrowing`, the flag that build
+actually uses. Without it the same sweep reports 64, because two files put values above
+`INT_MAX` in 32-bit `case` labels. The i386 build is kept deliberately as a **diagnostic
+oracle**: a file that fails on x86_64 but passes on i386 is blocked by pointer width and
+nothing else. Right now that's all 33 of them, and every remaining error in the tree is one
+class — a pointer cast into a smaller integer type — at **1,377 distinct sites**. Both
+counts reproduce with `tools/sweep-compile.sh`; re-run on 2026-10-10.
 
 **The entire remaining Windows surface:**
 
@@ -192,7 +207,9 @@ In rough order, and every item here is a real plan rather than a wish:
 3. **Controller support** — analogue triggers that behave progressively, because a rally
    game with on/off throttle isn't a rally game.
 4. **A championship builder** — Classic mode (the original progression) or Custom: any
-   number of tracks, reversed or not, stages per track, repairs on or off.
+   number of tracks, reversed or not, stages per track, repairs on or off. The game's own
+   championship screens and progression code are already in the decomp
+   (`FrontendMenus.cpp`); the custom rules are new.
 5. **Damage on a slider** — the game already deforms real mesh vertices on impact;
    Classic keeps the original values, or you scale them up.
 6. **Multiplayer** — and the good news is that rally is asynchronous. Cars race the
