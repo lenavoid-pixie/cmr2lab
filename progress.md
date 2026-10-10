@@ -109,9 +109,14 @@ Two more measurements that close the escape routes:
 - **UV set 1 is UV set 0.** Every vertex of every part of `205a1N` (1,204
   vertices), `foca1N` (1,144) and `6r4a1N` (1,360), 14 parts each: `uv1 == uv0`
   exactly, 0 differing vertices. So there is no second UV set holding a "correct"
-  mapping that the game uses and the viewer does not. (The engine's only stage that reads the
-  second set is blend case 11, `TCI_CAMERASPACEREFLECTIONVECTOR` — an environment
-  map, not a livery.)
+  mapping that the game uses and the viewer does not. (The engine does select the
+  second set for texture stage 1 in blend case 9 — `SetTexCoordIndex(param1, 1)`
+  in `ApplyTextureStageChange`, `0x004a4850` — but the set it selects is a
+  byte-for-byte copy of set 0, so it cannot change a livery. Case 11's
+  `TCI_CAMERASPACEREFLECTIONVECTOR | 1` is an environment map.)
+  Provenance: this is the viewer's own `uv1 == uv0` check re-run over three cars
+  and every part, not the engine's call sites; the call sites are read from the
+  decomp.
 - **Our own render agrees with the file.** Flat-lit flank views
   (`AMB=1 GAIN=0 FILL=0 SHADOW=0 BG=0 OFFW=2000 OFFH=1000 ELEV=0 DIST=0.35`,
   `YAW=0` and `180`, car `seaa1N`), OCR'd with `tesseract` (`afr` is the only
