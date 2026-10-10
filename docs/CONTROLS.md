@@ -7,6 +7,23 @@ it can be re-checked instead of believed.
 
 What exists in the port **today**, as opposed to what is decided:
 
+* **The pad's device state is read through SDL's gamepad API** (2026-10-10) —
+  `SDL_OpenGamepad` / `SDL_GetGamepadAxis` / `SDL_GetGamepadButton`, so the layer
+  works in SDL's vocabulary (named axes, named buttons) instead of the Deck's
+  control names; an Xbox pad, a DualSense, a Switch Pro pad and the Deck's own
+  controls all arrive in that one vocabulary, and the Deck is one device in the
+  list rather than the shape everything is bent around. The kernel evdev reader
+  is kept underneath as a fallback that fills the *same* named state, so the
+  path this port shipped on is still there. Everything the game sees is
+  unchanged in shape: ±0x10000 axes, the combined pedal axis, and the same DIK
+  keyboard mirror. Measured rather than asserted: three injected pad identities
+  all come back as the same named buttons through SDL's own mapping database,
+  the Deck's controller is opened over `/dev/hidraw2` exactly as the system's
+  own SDL3 opens it, and the same injected trigger values through both backends
+  land within one rounding step of each other (2 of 65536; 256 of 256 trigger
+  values either way; read latency indistinguishable at 0.05–0.11 ms). What is
+  **not** verified: a thumb on the physical Deck controls, which no process can
+  press. Instruments: `tools/padtest/`.
 * **The combined pedal axis is implemented and measured** — one function
   (`deck_dinput.cpp`, `deck_pedal_axis()`), handed to the game on joystick axis 1. See
   *The combined pedal axis* — including the part of this page that was **wrong until it was

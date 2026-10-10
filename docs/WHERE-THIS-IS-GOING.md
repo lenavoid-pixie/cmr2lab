@@ -1,8 +1,14 @@
 # Where this is going
 
-**None of this is built.** This page exists because the direction of a project is a design
-decision, and a direction that lives in one person's head gets built four different ways.
-Treat it as intent, not a roadmap. There are no dates here and there will not be.
+**None of these four features is built.** This page exists because the direction of a project
+is a design decision, and a direction that lives in one person's head gets built four
+different ways. Treat it as intent, not a roadmap. There are no dates here and there will
+not be.
+
+One of the four has had its foundation laid: the input layer reads pads through SDL's
+gamepad abstraction as of 2026-10-10, which is the part of controller compatibility that had
+to be right the first time. That is not the same as playing on a pad — the driving layout on
+those buttons is still not wired — and the other three are untouched.
 
 The owner's words, on why this page exists at all:
 
@@ -38,6 +44,14 @@ by construction. Write it narrowly instead and adding them later is a rewrite.
 
 **This one is not "later".** The input layer is being written now, which makes it an
 architectural decision rather than a feature request.
+
+**Status, 2026-10-10: the foundation exists, the feature does not.** The port's input layer
+now reads pads through SDL's gamepad API, so an Xbox pad, a DualSense, a Switch Pro pad and
+the Deck's own controls all arrive in one vocabulary by construction, with the kernel reader
+kept underneath for the Deck. What a player would actually notice — driving with those
+buttons — is still not wired, and the Deck's physical controls could not be pressed by any
+automated test, so that part is verified structurally rather than by a thumb. Details and the
+instruments: `docs/CONTROLS.md`, `tools/padtest/`.
 
 ### Wheel support
 
