@@ -1,14 +1,8 @@
 # Where this is going
 
-**None of these four features is built.** This page exists because the direction of a project
-is a design decision, and a direction that lives in one person's head gets built four
-different ways. Treat it as intent, not a roadmap. There are no dates here and there will
-not be.
-
-One of the four has had its foundation laid: the input layer reads pads through SDL's
-gamepad abstraction as of 2026-10-10, which is the part of controller compatibility that had
-to be right the first time. That is not the same as playing on a pad — the driving layout on
-those buttons is still not wired — and the other three are untouched.
+**None of this is built.** This page exists because the direction of a project is a design
+decision, and a direction that lives in one person's head gets built four different ways.
+Treat it as intent, not a roadmap. There are no dates here and there will not be.
 
 The owner's words, on why this page exists at all:
 
@@ -45,14 +39,6 @@ by construction. Write it narrowly instead and adding them later is a rewrite.
 **This one is not "later".** The input layer is being written now, which makes it an
 architectural decision rather than a feature request.
 
-**Status, 2026-10-10: the foundation exists, the feature does not.** The port's input layer
-now reads pads through SDL's gamepad API, so an Xbox pad, a DualSense, a Switch Pro pad and
-the Deck's own controls all arrive in one vocabulary by construction, with the kernel reader
-kept underneath for the Deck. What a player would actually notice — driving with those
-buttons — is still not wired, and the Deck's physical controls could not be pressed by any
-automated test, so that part is verified structurally rather than by a thumb. Details and the
-instruments: `docs/CONTROLS.md`, `tools/padtest/`.
-
 ### Wheel support
 
 **Axes and pedals: probably straightforward.** SDL exposes wheels, and the game already
@@ -75,6 +61,31 @@ research problem.
 
 Worth noting: there is already a free-camera project for replays. Same machinery, different
 consumer. One of them probably builds the other.
+
+### Better spectators
+
+The crowds are flat sprites — a cut-out photograph standing next to the scenery, next to a
+cut-out tree. The owner's gripe, and a fair one: he wants a crowd that reacts, moves along
+the track, waves, takes pictures. The reference points he named are the crowds in WRC 4 and
+Richard Burns Rally.
+
+**Three separate jobs wearing one word.** Improving the crowd *art* is a data job — the
+container format is cracked and repacking is verified byte-identical, so better textures,
+more variety and more animation frames are export, edit, repack. Teaching the crowd to
+*behave* — react to the car passing, jump back, raise a camera — is a genuine new subsystem:
+the engine has to know how close the car is to each spectator and pick a frame accordingly.
+Building the crowd out of actual *geometry* is the third and largest job, because it means
+replacing the billboard draw path rather than feeding it.
+
+**The framing that matters:** the goal is not "make everything 3D". Billboards are not a
+2000-era compromise that we grew out of — impostors are still what modern engines use for
+anything the camera is not close to. The right target is level of detail: real geometry for
+what is near the car, impostors for what is not. Polygons spent where the eye actually is.
+
+**This is the same answer for trees** — no trunks and 2D foliage, which the owner named as
+his one real gripe with the original. The trees were flat because a forest at 150 km/h was
+unaffordable in 2000, not because anyone thought a photograph of a tree was better. Near
+trees as geometry, distant forest as impostor.
 
 ### Different gauges
 
