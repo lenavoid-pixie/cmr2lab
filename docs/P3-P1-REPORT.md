@@ -96,11 +96,13 @@ typedef char StageNodeTablesSize[sizeof(StageNodeTables) == 0x14 ? 1 : -1];
 ```
 
 17 of these exist. **10 hold no pointers and still pass unchanged on x86_64** —
-they are a free correctness oracle and were left EXACTLY as they were
-(verified again this round: `ReplayLevelState` 0x64, `FireworkRocket` 0x938,
-`RallyStageTables` 0x80, `RallyOverallTables` 0x64, `TimerPulseState` 0x608,
-`NetTriangleState` 0x194, `RaceCarSoundState` 0xb4, plus three that do not appear
-in the dumped TUs).
+they are a free correctness oracle and were left EXACTLY as they were. Verified two
+ways this round: clang's layout dump gives them their original sizes with no
+pointers in them (`ReplayLevelState` 0x64, `FireworkRocket` 0x938 ...
+`TimerPulseState` 0x608), and **none of the ten names appears even once in the
+post-P1 error census** — `grep -c` over `work/P3/sweep-p1/all_errors.txt` is 0 for
+all ten, including the three whose TUs were never dumped
+(`PlayerOptionCacheSize`, `RallyPairingTablesSize`, `ChampionshipTablesSize`).
 
 The 7 that hold pointers were re-expressed so they keep BOTH oracles:
 
