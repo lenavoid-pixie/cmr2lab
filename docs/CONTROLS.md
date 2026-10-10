@@ -11,11 +11,16 @@ What exists in the port **today**, as opposed to what is decided:
   (`deck_dinput.cpp`, `deck_pedal_axis()`), handed to the game on joystick axis 1. See
   *The combined pedal axis* — including the part of this page that was **wrong until it was
   measured**.
-* **The driving button layer is not implemented.** The pad's current layout is the *menu*
-  layout; on a stage, A/X do not yet shift and B is not yet the handbrake. No pad input
-  reaches a car anyway, because no stage has been loaded in the port yet — which is why the
-  buttons are still free to be decided on paper without anyone mistaking this page for a
-  description of a working car.
+* **The driving button layer is not implemented as such** — there is no pad layout written
+  for a stage yet — but the bits do not start from zero, because the pad already speaks the
+  game's keyboard and the car reads that state through the game's own bit map. Y already
+  lands on Change Camera and the gear pair already works; on L1/R1, not on A/X. See *What the
+  pad already does on a stage*. What the owner's mapping implies is mostly a **move**, not a
+  build.
+* **One thing in that layer was wrong and is fixed** (2026-10-10): the two triggers' keyboard
+  mirror was inverted — R2 set the Brake key and L2 set the Accelerate key. Fixed and
+  rebuilt; see the same section for the evidence, which is a reading of two code paths, not a
+  stage.
 
 ---
 
@@ -176,6 +181,46 @@ clears it while the car waits at the start line and after it has finished, and s
 running. One caveat, said out loud rather than buried: the decompilation's own header comment
 labels `0xb9c` "automatic gearbox enabled", which contradicts how `StageObjects.cpp:12776`
 uses it. The comment is the unverified part; the use is what the code does.
+
+## What the pad already does on a stage (read from two code paths, not measured)
+
+There is no stage in the port yet, so nothing here was measured on one. It is the crossing of
+two things that *were* read: the pad layer's current layout (`deck_dinput.cpp`,
+`pad_keys_build()`) and the car's own bit meanings (`g_carButtonMasks`, above). The pad
+presents itself to the game as the keyboard — its keys are ORed into the same DIK state the
+game polls — so while **driving** this is what the pad's buttons mean to the car:
+
+| Deck input | key the pad sends | car bit | what the car does |
+|---|---|---|---|
+| A | Enter | — | nothing: Enter is in no car binding |
+| B | Esc | `0x400` | Pause (the tenth action), not a car action |
+| X | Space | `0x10` | **Handbrake** |
+| Y | C | `0x80` | **Change Camera** — already what the owner wants |
+| L1 | `[` | `0x40` | **Gear Down** |
+| R1 | `]` | `0x20` | **Gear Up** |
+| Select / Start | Esc / Enter | — | Pause / nothing |
+| D-pad, left stick | arrows | `1,2,4,8` | Steering, Accelerate, Brake |
+| L2 past 25% | Down | `0x8` | Brake (digital mirror of the analogue pedal) |
+| R2 past 25% | Up | `0x4` | Accelerate (same) |
+
+So the owner's mapping is a move: **gears from L1/R1 to A/X** (A = Gear Up, X = Gear Down),
+**handbrake from X to B**, Y stays where it is, L1/R1 freed. The triggers keep their analogue
+job on axis 1 and their coarse keyboard mirror on top of it.
+
+**Fixed while checking this (2026-10-10).** That mirror was inverted: the code had
+`trigger_pct(4)` — L2, the brake — driving the `up`/Accelerate key and `trigger_pct(5)` — R2,
+the throttle — driving the `down`/Brake key, which contradicted its own comment, the analogue
+axis (where R2 pulls axis 1 negative and negative is throttle) and the pad's own layout.
+`deck_dinput.cpp` swapped them; the platform layer rebuilds and links clean (`link32.sh`,
+5/5 objects, link exit 0). **Evidence level, stated plainly: a reading plus a compile, not a
+stage.** Pulling R2 on a stage is still the measurement that would replace the argument, and
+it cannot be made until a stage loads.
+
+**One caveat that is a real limit:** the game swaps to a hardcoded arrow/Return/Escape set
+while input is paused (`CGameInfo::SetInputAndGamePaused` → `Input.cpp:1523`), which is how
+its own frontend keeps working whatever a player has bound. So what the pad's keys mean
+depends on the game's state as well as on ours — which is exactly the menu/driving split the
+next section describes.
 
 ## What this means for the pad layer (a design note, not a measurement)
 
