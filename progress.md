@@ -50,7 +50,22 @@ Read §0 as mine, dated, and everything below as the previous worker's.
 - **Biggest gap:** the D3D7 state tracker (277 of 298 call sites are state calls) still
   does not exist, so the port still cannot draw a car. This frame is the target image
   for M3 and the run-split/alpha/texture list above is the spec it has to reproduce.
-- **Not claimed:** no human has looked at this frame. Miami is the first.
+- **The texture fix has a number, not an opinion.** `NAMETEX=1` renders the old
+  name-matched path, so the two were diffed: car mean chroma **2.2 → 13.6**, mean
+  luminance **23.1 → 72.7**, and 505 of 888 triangles moved off the wrong texture.
+- **The path runs on all 259 cars**, not on the one I looked at:
+  `docs/tables/texruns-sweep.tsv` + `src/port/tools/texruns_sweep.py` — 259/259
+  completed, **0 cars with anything wrong**, 123,127 triangles, 3,873 runs, median
+  15 runs per car, 0 runs refused. Slot roles are the same across four
+  manufacturers and the dimensions land at 3.7–4.2 m by 1.4–1.5 m.
+- **Colour is not swapped** (the check that makes a render trustworthy): the car's
+  mean colour in the frame matches that car's own body texture in channel order on
+  all three cars tested, including the blue Impreza and the blue Metro 6R4.
+- **The windowed path core-dumped and now does not** (`patch_swapfmt.py`: a Deck
+  swapchain is `B8G8R8A8_UNORM`, not `R8G8B8A8_UNORM`, and SDL refuses a resolve
+  across two formats). Verified: 120 frames in a real window, clean exit.
+- **Not claimed:** no human has looked at this frame. Miami is the first. And 258 of
+  the 259 cars in the sweep have never been looked at at all — that sweep is counts.
 
 ---
 

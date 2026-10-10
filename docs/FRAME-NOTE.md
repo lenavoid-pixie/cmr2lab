@@ -117,6 +117,21 @@ anyone's eye. The livery travels too: car mean colour is (45.0, 42.4, 48.0) for
 the Focus, **(55.8, 48.8, 60.2) for the blue Impreza** and (50.1, 53.0, 64.4) for
 the blue-and-white Metro 6R4 — each car's own texture, not one shared default.
 
+### And the colour is not swapped
+
+A rendered frame is only trustworthy if its channels are in the right order, so
+here is the check: the mean colour of the **car pixels** against the mean colour of
+that car's **own body texture**. Three cars, three different liveries, and the
+channel ordering matches every time — no R/B swap anywhere in the chain
+(load → DXT5/TGA decode → upload → shade → the BMP this repo carries).
+
+| car | body texture mean | channel order | car pixels mean | channel order |
+|---|---|---|---|---|
+| foca1N | (93.0, 87.2, 94.4) | B R G | (45.0, 42.4, 48.0) | B R G |
+| ia1a1N | (92.7, 76.5, 106.8) | B R G | (55.8, 48.8, 60.2) | B R G |
+| 6r4a1N | (91.5, 99.5, 125.8) | B G R | (50.1, 53.0, 64.4) | B G R |
+
+
 ## 3d. THE VIEWER RUNS IN A WINDOW — this was broken until 15:11
 
 Offscreen it was fine; a window was a **core dump**, because a Deck swapchain is
