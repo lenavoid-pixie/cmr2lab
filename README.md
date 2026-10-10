@@ -134,9 +134,14 @@ $ ./cmr2lab repack /path/to/Colin\ McRae\ Rally\ 2.0
 repack VERIFY: 581/581 byte-identical   (skipped 1 non-container)
 ```
 
-2.26 GB, 581 containers, zero failures. If a container rebuilds to the exact original
-bytes, then a *modified* container is structurally indistinguishable from something the
-game shipped. That's the whole safety argument for editing your own copy.
+581 containers, zero failures. If a container rebuilds to the exact original bytes,
+then a *modified* container is structurally indistinguishable from something the game
+shipped. That's the whole safety argument for editing your own copy.
+
+(An earlier version of this page quoted the install at 2.26 GB. That figure does not
+match measurement — a real retail install is 908 files and roughly 0.6 GB. The container
+count is measured; the size is not, so it is not stated. If you want to settle it, run
+`du -sh` on your own copy and open an issue.)
 
 ---
 
