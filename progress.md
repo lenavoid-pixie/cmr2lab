@@ -121,6 +121,11 @@ P2 untouched): `work/P3/P3-P1-REPORT.md`. §5 items 2 and 3 are therefore done. 
 is left is §5 item 1 (the pad lane) and **P2 — the only thing now between this tree
 and 66/66.**
 
+**ASK (sequencing, not a blocker).** P2 is 1,377 mechanical sites; S2 (the D3D7
+state tracker) is the thing that stops the port drawing its own 3D. My plan says P2
+then S2. If you want them swapped so the game looks right sooner, say so here and I
+will swap — but I will not silently re-sequence my own plan.
+
 ## 1. RIGHT NOW
 
 - **Daemon** `lena_daemon.py` pid **250660**, **2 workers**, model `deepseek-v4-flash`,
