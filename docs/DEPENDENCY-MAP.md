@@ -109,3 +109,43 @@ the count observed in a 50-second run.
 | `CGame::RunStateRenderCallbacks` | Game.cpp:1146 | -- |
 | `Game_DrawSceneViewport` | Game.cpp:2580 | -- |
 
+---
+
+## 4. The shim build order this buys
+
+The point of the graph. Not compiler-error order — *measured* order, from the
+relay trace in `RUNTIME-RELAY.md` §3.
+
+| tier | what it must make possible | symbols | evidence |
+|---|---|---|---|
+| **0 CRT** | the process to start | `_initterm`, `__set_app_type`, `__getmainargs`, `_controlfp`, `malloc`/`calloc`/`realloc`/`free`/`memmove`/`strncpy`, `time`, `srand`, `fopen` | `entry` fires first; `FUN_004ce163` alone makes 142 calls |
+| **1 logger** | anything to be observable | `CreateFileA`, `WriteFile`, `FlushFileBuffers`, `lstrlenA`, `lstrcpyA`, `CloseHandle` | 21 WriteFile from `CLogger::LogToFile` |
+| **2 registry** | **the game not to exit silently** | `RegOpenKeyExA`, `RegQueryValueExA`, `RegCloseKey` | `CRegKey::GetValueFromKey`, 45 calls; the gate is here |
+| **3 window** | a window to exist | `RegisterClassA`, `CreateWindowExA`, `GetSystemMetrics`, `LoadIconA`, `LoadCursorA`, `GetStockObject`, `ShowWindow`, `UpdateWindow`, `SetFocus`, `FindWindowA` | `CMain::CreateGameWindow`, 10 calls |
+| **4 pump** | frames to be driven | `PeekMessageA`, `GetMessageA`, `TranslateMessage`, `DispatchMessageA`, `DefWindowProcA`, `RegisterWindowMessageA`, `PostQuitMessage`, `ShowCursor`, `DrawMenuBar`, `RedrawWindow` | `CMain::MessageHandler`, 69 calls |
+| **5 input** | the boot state machine to finish | `DirectInputCreateEx`, `SystemParametersInfoA` | `CInput::DInputCreate` |
+| **6 video** | the first frame | `ChoosePixelFormat`, `DescribePixelFormat`, `SetPixelFormat`, `DirectDrawCreateEx`, `MessageBoxA` | `CGraphics::InitializeDirectX` |
+| **7 render** | the frame's contents | the D3D7 device methods — `SetTextureStageState`\*113, `SetRenderState`\*75, `LightEnable`\*19, `SetTransform`\*18, 10 draws | static only; **not reached at runtime** |
+
+Two things fall out of this that the census could not show:
+
+* **Tier 2 is the silent killer.** A registry shim that returns nothing coherent
+  does not error — it makes the game exit in one second logging "Program
+  finished normally". It is the highest-leverage piece in the whole layer and it
+  is trivial to write.
+* **Tier 4 is bigger than it looks.** `DefWindowProcA` fires 39 times and
+  `RegisterWindowMessageA` 30 times *before a first frame*, from the `default:`
+  arm of `CMain::MessageHandler`. Neither appears in the census. The pump cannot
+  be built last.
+
+## 5. Scope note on the class-A list
+
+The 14 type names in §2 come from the `sweep10full` logs. They have since been
+declared: `platform/dx7compat.h` and `platform/deck_mm_shim.h` now carry them
+(that was `patch_v8`, "the whole multimedia layer was simply never declared").
+The row that still matters is the *shape* of the fix, not the list: one missing
+header — `mmsystem.h` stopping after `platform_types.h` — produced 14 unknown
+types across 120 errors and 12 translation units. `DIDEVCAPS`,
+`DIDEVICEOBJECTINSTANCEA`, `DIENVELOPE`, `DIPROPDWORD`, `DIPROPRANGE` are all
+`Input.cpp`; `DSBCAPS`, `DSBUFFERDESC`, `IDirectSoundBuffer` are all `Sound.cpp`.
+Two files, two headers, one fix each.
