@@ -5,7 +5,8 @@ the timestamp below, it is not in this file. Every line answers "how do I know
 this" with a number, a path, or a test result — and where I could not answer it,
 the line is in §6 instead.
 
-**Last rewritten: 2026-10-10 14:54 EEST.** This file is one commit — the rewrite
+**Last whole rewrite: 2026-10-10 14:54 EEST. §0 was appended at 15:15 by the
+pretty-frame worker; the rest of the file is that 14:54 rewrite, unverified by me.** This file is one commit — the rewrite
 that carried it is `git log -1 -- progress.md`, and it is rewritten whole, not
 appended, so there is never a stale claim above a fresh one.
 
@@ -18,7 +19,42 @@ Paths, so they line up on both ends:
 
 | short name | real path on the Deck |
 |---|---|
-| the ins## 1. RIGHT NOW
+| the ins## 0. THE FRAME MIAMI ASKED FOR — added 2026-10-10 15:15 EEST by the worker on
+## the "make the port a pretty thing to look at" job.
+
+**This block is APPENDED BY A DIFFERENT WORKER, at the top, on purpose.** The rest
+of this file is carried forward from the 14:54 rewrite and I did not re-verify it.
+Read §0 as mine, dated, and everything below as the previous worker's.
+
+- **It is on GitHub, which is how the phone gets it.** `screenshots/cmr2deck-205a1N-1280x800.png`
+  (one frame, 1280x800, 4x MSAA) and `screenshots/cmr2deck-205a1N-4views-1280x800.png`
+  (four yaws, 640x400 each, stacked). Commit `66d32d1`, pushed 15:12.
+- **`docs/FRAME-NOTE.md` is the honest note and it is the deliverable that matters.**
+  It says line by line what came from the game's own code and what is mine. The
+  one-line version: **the port does not draw this.** The *viewer* (`src/port/cmr2deck.c`)
+  draws the game's *data* with our draw code, outside the game.
+- **What changed, in one sentence:** the viewer now binds the texture each triangle
+  names in the file (`MeshTriangle + 4`, `field_0x2c = 0`, the rule in
+  `Game_DrawMeshTextureRuns` 0x0049c510) instead of matching part names against the
+  texture table — and it uses the game's own alpha test (`ALPHAREF` 0x80/1,
+  `D3DCMP_GREATER`) and blend pair (SRCALPHA/INVSRCALPHA). Before: every body panel
+  was bound to texture 0, `AP5NWBDf`, mean RGB 17,17,19, which is why the car was a
+  grey blob. After: 8 distinct textures over 27 runs, 0 runs refused.
+- **Measured, not eyeballed** (`src/port/tools/preview.py --diff`, against a frame
+  rendered with `NOCAR=1`): the car covers **21.5%** of a 1280x800 frame in 926x421 px;
+  its mean luminance is **72.5**; the culling direction is settled by measurement
+  (`CULL=front` drops that to **28.8**, `CULL=back` ≈ `CULL=none`), so the faces kept
+  are the outside ones.
+- **Mine, labelled, and in the note:** the ambient value, both lights, the planar
+  ground shadow, the backdrop, MSAA, the camera and the framing.
+- **Biggest gap:** the D3D7 state tracker (277 of 298 call sites are state calls) still
+  does not exist, so the port still cannot draw a car. This frame is the target image
+  for M3 and the run-split/alpha/texture list above is the spec it has to reproduce.
+- **Not claimed:** no human has looked at this frame. Miami is the first.
+
+---
+
+## 1. RIGHT NOW
 
 - **Daemon** `lena_daemon.py` pid **250660**, **2 workers**, model `deepseek-v4-flash`,
   uptime **5,400 s (~90 min)**, 400 steps per round. `state/status.json` was
