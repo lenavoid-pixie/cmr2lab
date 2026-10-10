@@ -1185,7 +1185,7 @@ int main(int argc, char **argv) {
     if ((e = getenv("WY"))) wy = (float)atof(e);
     if ((e = getenv("WZ"))) wz = (float)atof(e);
     /* fixed camera, so two runs can be compared pixel for pixel */
-    float yaw0 = 38.0f, elev0 = 14.0f, distk = 1.30f;
+    float yaw0 = 38.0f, elev0 = 14.0f, distk = 1.12f;
     if ((e = getenv("YAW")))  yaw0  = (float)atof(e);
     if ((e = getenv("ELEV"))) elev0 = (float)atof(e);
     if ((e = getenv("DIST"))) distk = (float)atof(e);

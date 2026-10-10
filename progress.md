@@ -41,8 +41,8 @@ Read §0 as mine, dated, and everything below as the previous worker's.
   was bound to texture 0, `AP5NWBDf`, mean RGB 17,17,19, which is why the car was a
   grey blob. After: 8 distinct textures over 27 runs, 0 runs refused.
 - **Measured, not eyeballed** (`src/port/tools/preview.py --diff`, against a frame
-  rendered with `NOCAR=1`): the car covers **21.5%** of a 1280x800 frame in 926x421 px;
-  its mean luminance is **72.5**; the culling direction is settled by measurement
+  rendered with `NOCAR=1`): the car covers **28.8%** of a 1280x800 frame in 1089x509 px;
+  its mean luminance is **76.6**; the culling direction is settled by measurement
   (`CULL=front` drops that to **28.8**, `CULL=back` ≈ `CULL=none`), so the faces kept
   are the outside ones.
 - **Mine, labelled, and in the note:** the ambient value, both lights, the planar
@@ -67,6 +67,9 @@ Read §0 as mine, dated, and everything below as the previous worker's.
 - **The windowed path core-dumped and now does not** (`patch_swapfmt.py`: a Deck
   swapchain is `B8G8R8A8_UNORM`, not `R8G8B8A8_UNORM`, and SDL refuses a resolve
   across two formats). Verified: 120 frames in a real window, clean exit.
+- **The frame is reproducible from the repo byte for byte**: replaying the five patch
+  scripts over the pristine source, rebuilding and re-rendering gives the same md5
+  (`91a8ad5135bf1171568b950f95d22598`) and 0 differing pixels.
 - **Not claimed:** no human has looked at this frame. Miami is the first. And 258 of
   the 259 cars in the sweep have never been looked at at all — that sweep is counts.
 

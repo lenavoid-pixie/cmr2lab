@@ -174,8 +174,10 @@ output is bit-identical to what it was before that patch.
 * **The backdrop.** A gradient I wrote, drawn as a full-screen triangle. CMR2 has
   no garage; its cars are drawn inside a stage against sky, trees and road.
 * **MSAA 4x.** The game rendered into a plain surface with no multisampling.
-* **The camera.** Fixed by me: yaw 38°, elevation 14°, distance 1.30 × the car's
-  longest side. The interactive viewer has a gamepad camera.
+* **The camera.** Fixed by me: yaw 38°, elevation 14°, distance 1.12 × the car's
+  longest side — chosen by measuring coverage (21.4% of the frame at 1.30, 28.8% at
+  1.12) and stopping where the cast shadow still keeps a margin on every car
+  measured. The interactive viewer has a gamepad camera.
 * **The material.** White, i.e. `g_sceneMaterial` as `Scene_RestoreLights`
   (0x004b2e50) sets it. Not stubbed wrongly — just noting it is a constant here.
 * **Not implemented at all:** fog, the second uv set, the per-triangle
@@ -227,5 +229,20 @@ Knobs that change the picture, all printed by the binary at startup:
 `FULLSCREEN=`, `EXITFRAMES=n`, `TEXDUMP=DIR`.
 
 `NOCAR=1` exists for honesty: it renders the backdrop and nothing else, so
-"how much of the frame is the car" is a measured number (21.5%) instead of an
+"how much of the frame is the car" is a measured number — **28.8%**, in a
+1089 x 509 px bounding box that also contains the cast shadow — instead of an
 impression.
+
+## 7. THE PICTURES ARE REPRODUCIBLE FROM THIS REPO, BYTE FOR BYTE
+
+Replayed from the pristine source with the five patch scripts, in order:
+
+```
+patch_textures.py -> patch_states.py -> patch_pretty.py -> patch_nametex.py -> patch_swapfmt.py
+$ diff -q src/cmr2deck.c <the source that drew the PNGs>   # identical
+$ md5sum hero.bmp  (before / after the replay)              # 91a8ad5135bf1171568b950f95d22598, both
+$ preview.py --diff before.bmp after.bmp                    # 0 pixels differ
+```
+
+So the frame in `screenshots/` is not a lucky run: it is what that source produces
+on this Deck today.
