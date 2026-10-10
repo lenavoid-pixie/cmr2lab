@@ -184,7 +184,9 @@ def cmd_tabs(a):
         mark = '●' if k=='cmr2' else '○'
         print(f"  {mark} {k:5s} {v}")
     print("\n  CMR2 tab: live today — unpack/repack/upscale on the original game.")
-    print("  CMR3 tab: opens once the PP_F geometry record layout is parsed.")
+    print("  CMR3 tab: opens when content is imported under <game>/cmr3.")
+    print("            (the PP_F geometry layout for CMR2 cars is parsed already")
+    print("             -- 259/259 close exactly; see docs/C3D.md.)")
     return 0
 
 def cmd_install(a):

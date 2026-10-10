@@ -98,11 +98,17 @@ A decompilation of the PC build exists: **122 files, 135,805 lines of C++**.
 The entire remaining Windows surface is:
 
 ```
-149  Direct3D 7 calls
- 14  Win32 calls
-  5  files containing __asm
+278  Direct3D 7 call sites, 20 methods — 256 state, 22 draws
+ 45  files that include <windows.h>
+ 36  __asm occurrences, 6 files — 0 visible to a non-MSVC compiler
 ```
 
 That is the whole distance. `src/port/` holds the native renderer — C + SDL3,
 built rootless with `zig cc`, opening a real Vulkan window and drawing a model
 straight out of the retail files. It renders a car. It is not a game yet.
+
+**How much of that decompilation compiles today: 26 of 66 translation units** on
+x86_64 (53 of 66 on i386, which is kept only as a diagnostic — those 27 extra
+files are blocked by pointer width and nothing else). `docs/PORT-PLAN.md` has the
+measurement, the method, the error census, and a list of the numbers this
+project published before running them and then had to fix.
