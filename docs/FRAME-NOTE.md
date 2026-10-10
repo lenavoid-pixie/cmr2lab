@@ -11,6 +11,7 @@ the file.
 |---|---|
 | `screenshots/cmr2deck-205a1N-1280x800.png` | one frame, 1280x800, MSAA 4x — the hero shot |
 | `screenshots/cmr2deck-205a1N-4views-1280x800.png` | the same car from 4 yaws, 640x400 each, stacked |
+| `screenshots/cmr2deck-4cars-1280x800.png` | FOUR cars, same camera — Focus, Impreza, Metro 6R4, Peugeot 205 |
 
 Both come from `src/port/cmr2deck.c` — **the native viewer**, built on this Deck,
 rendering on the Deck's own Vulkan device (RADV VANGOGH).
@@ -68,6 +69,66 @@ wrong this morning:
    transparent; drawn opaque it blacked out the windows. With the game's own
    alpha test and blend pair the glass and the light pods read correctly.
 
+## 3b. THE TEXTURE FIX, MEASURED — not "it looks better"
+
+`NAMETEX=1` renders the frame through the **old** name-matched guess, so the two
+paths can be diffed instead of argued about. Same camera, same lighting, same
+code, one line different — the pixels the car covers, measured against a
+`NOCAR=1` frame of the same setup:
+
+| texture path | car px | mean RGB | mean chroma | mean luminance |
+|---|---|---|---|---|
+| OLD — `pick_tex(part name)` | 210,615 | (22.7, 23.0, 24.6) | **2.2** | **23.1** |
+| NEW — the file's own ID at `MeshTriangle+4` | 219,631 | (72.0, 72.8, 73.9) | **13.6** | **72.7** |
+
+That is the grey blob and its cure as a number: **6.2× the chroma**, 3.1× the
+luminance, and 505 of 888 triangles moved off the wrong texture.
+
+## 3c. THE PATH RUNS ON ALL 259 CARS, NOT ON THE ONE I LOOKED AT
+
+`src/port/tools/texruns_sweep.py`, full table in `docs/tables/texruns-sweep.tsv`:
+
+```
+259 cars, 4 at a time:  259 completed, 0 with something to look at
+triangles across the corpus: 123127      runs: 3873
+runs per car: min 3 median 15 max 29
+distinct textures per car: min 3 max 8
+kept% (triangles / face records): min 91.1 max 100.0
+runs refused for a missing texture: 0 on every car
+```
+
+"0 with something to look at" means: no texture index out of range, no part that
+produced no run, no car with zero triangles, no non-zero exit.
+
+**And the slot roles are the same on every car family** — four different
+manufacturers, same slots for the same jobs:
+
+| slot | 205a1N (Peugeot 205) | foca1N (Focus) | ia1a1N (Impreza) | 6r4a1N (Metro 6R4) |
+|---|---|---|---|---|
+| 2 | ap5dbodf 496 | AFFDBoDF 444 | Alidbodf 483 | a6rdbodf 492 |
+| 4 | AP5NWhDf 144 | AFFNWhDf 144 | ALiNWhDf 144 | A6RNWhDf 144 |
+| 12 | ap5intdf 56 | AFFIntDf 54 | ALiIntDf 66 | a6rintdf 80 |
+| 13/16 | glass / glodf | glass / glodf | glass / glodf | glass / glodf |
+| 24 | ap5ligbr 18 | AFFLigBr 36 | ALiLigBr 34 | a6rligbr 18 |
+
+…and their dimensions come out where a real car's are (3.72–4.15 m long,
+1.38–1.48 m tall), which is a check on the geometry that does not depend on
+anyone's eye. The livery travels too: car mean colour is (45.0, 42.4, 48.0) for
+the Focus, **(55.8, 48.8, 60.2) for the blue Impreza** and (50.1, 53.0, 64.4) for
+the blue-and-white Metro 6R4 — each car's own texture, not one shared default.
+
+## 3d. THE VIEWER RUNS IN A WINDOW — this was broken until 15:11
+
+Offscreen it was fine; a window was a **core dump**, because a Deck swapchain is
+not `R8G8B8A8_UNORM` and SDL refuses a resolve whose format differs from its
+colour target. `patch_swapfmt.py` asks the swapchain for its format before any
+pipeline exists (it comes back `B8G8R8A8_UNORM`, format 12) and uses it for the
+MSAA texture and every colour target. Verified by running 120 frames in a real
+window on this Deck's Wayland session and watching it exit cleanly. **The PNGs
+above are from the offscreen path**, whose format is `UNORM` (format 4) and whose
+output is bit-identical to what it was before that patch.
+
+
 ## 4. WHAT I FAKED, STUBBED, OR CHOSE — mine, not the game's
 
 * **The lights.** The ambient value (0.40), the key light direction and gain
@@ -115,9 +176,10 @@ flags, the texture IDs and the node transforms are now all read from the file an
 printed — so when the RHI lands, this frame is what it has to reproduce, and
 `tools/preview.py --diff` is how we will check it.
 
-Second gap, smaller and duller: this is **one car**. The per-triangle texture
-path has been run over 205a1N only; the earlier corpus passes (259 cars) were
-about counts and crashes, not about which texture each triangle names.
+Second gap, smaller and duller: the corpus pass (§3c) proves the path *runs* on all
+259 cars with every texture index in range and the same slot roles, but it is
+counts — **nobody has looked at 258 of those cars**, and this note's claims about
+*appearance* are claims about 205a1N plus the three in the four-car sheet.
 
 ## 6. REPRODUCE IT
 

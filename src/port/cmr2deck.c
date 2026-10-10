@@ -741,6 +741,7 @@ static int c3d_load(C3d *c, const char *path, int wheelplace, int nodeplace,
     MeshStats S; memset(&S, 0, sizeof S);
     float lo[3] = { 1e9f, 1e9f, 1e9f }, hi[3] = { -1e9f, -1e9f, -1e9f };
     int corner = 0, nedge = 0, truncated = 0, fb_bad = 0;
+    int nametex = getenv("NAMETEX") ? 1 : 0;   /* the OLD path, for the A/B */
     int texruns = 0;                 /* runs created from the file's texture IDs */
     int texcount[MAXTEX]; memset(texcount, 0, sizeof texcount);
     int runsat[MAXPARTS]; memset(runsat, 0, sizeof runsat);
@@ -954,8 +955,11 @@ static int c3d_load(C3d *c, const char *path, int wheelplace, int nodeplace,
                     if (ix[0] == ix[1] || ix[1] == ix[2] || ix[0] == ix[2]) continue;
                     if ((size_t)c->nidx + 3 > c->icap) break;
                     /* texture of this triangle: record+4, field_0x2c = 0.
-                     * -1 means "no texture" and is not a slot we can bind. */
-                    int t = (int)ru32(rec, TRI_TEXOFF);
+                     * -1 means "no texture" and is not a slot we can bind.
+                     * NAMETEX=1 is the OLD name-matched guess, kept so the two
+                     * paths can be rendered and diffed (tools/preview.py --diff)
+                     * instead of argued about. */
+                    int t = nametex ? P->tex : (int)ru32(rec, TRI_TEXOFF);
                     if (t < 0 || t >= MAXTEX) t = -1;
                     /* a new run when the texture changes, exactly like
                      * Game_DrawMeshTextureRuns / Graphics_DrawMeshTextureBatches */
@@ -1051,8 +1055,8 @@ static int c3d_load(C3d *c, const char *path, int wheelplace, int nodeplace,
     {
         int used = 0;
         for (int t = 0; t < MAXTEX; t++) if (texcount[t]) used++;
-        printf("[TEXRUNS] %d runs from the file's own per-triangle texture IDs, "
-               "%d distinct textures bound", c->nruns, used);
+        printf("[TEXRUNS] %d runs from the %s, %d distinct textures bound", c->nruns,
+               nametex ? "PART NAMES (NAMETEX=1, the old guess)" : "file's own per-triangle texture IDs", used);
         if (g_mesh_mode == MESH_STRIP) printf("  (STRIP path: name-matched, one run per part)");
         printf("\n");
         printf("[TEXRUNS]");
@@ -1301,7 +1305,13 @@ int main(int argc, char **argv) {
         }
     }
     /* ---- render targets. MSAA is mine: the game rendered into a plain 32-bit
-     * surface, so this is presentation, not fidelity -- it is printed as such. */
+     * surface, so this is presentation, not fidelity -- it is printed as such.
+     * The colour format is the SWAPCHAIN's when there is a window: SDL refuses a
+     * resolve whose format does not match its colour target, and a Deck
+     * swapchain is not R8G8B8A8_UNORM. Offscreen keeps UNORM, which is the
+     * format the game's own 32-bit surface corresponds to. */
+    SDL_GPUTextureFormat ctf = win ? SDL_GetGPUSwapchainTextureFormat(dev, win)
+                                   : SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
     int samples = msaa;
     SDL_GPUTexture *color = NULL, *color_ms = NULL;
     if (!win) {
@@ -1320,19 +1330,19 @@ int main(int argc, char **argv) {
     if (samples > 1) {
         SDL_GPUTextureCreateInfo ci = {0};
         ci.type = SDL_GPU_TEXTURETYPE_2D;
-        ci.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+        ci.format = ctf;
         ci.width = W; ci.height = H; ci.layer_count_or_depth = 1; ci.num_levels = 1;
         ci.sample_count = scount;
         ci.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
         color_ms = SDL_CreateGPUTexture(dev, &ci);
     }
-    printf("[CFG] samples=%d cull=%s ambient=%.2f key=%.2f fill=%.2f "
+    printf("[CFG] colour target format %d, samples=%d cull=%s ambient=%.2f key=%.2f fill=%.2f "
            "light=(%.2f,%.2f,%.2f) fill_dir=(%.2f,%.2f,%.2f) vshade=%d backdrop=%d "
            "castshadow=%d\n   (the ambient, both lights, the shadow, the backdrop and the "
            "framing are MINE. The alpha test, the alpha ref 0x80/1, the "
            "SRCALPHA/INVSRCALPHA blend pair and every texture/vertex/triangle are the "
            "game's)\n",
-           samples, cullenv ? cullenv : "back", ambient, gain, fillg,
+           (int)ctf, samples, cullenv ? cullenv : "back", ambient, gain, fillg,
            ldir[0], ldir[1], ldir[2], ldir2[0], ldir2[1], ldir2[2],
            vshade, use_bg, shadow);
 
@@ -1444,7 +1454,7 @@ int main(int argc, char **argv) {
                 blend.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
             }
             SDL_GPUColorTargetDescription ctd = {
-                .format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+                .format = ctf,
                 .blend_state = blend,
             };
             SDL_GPUGraphicsPipelineCreateInfo pci = {0};
@@ -1481,8 +1491,7 @@ int main(int argc, char **argv) {
         sb.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
         sb.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
         sb.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
-        SDL_GPUColorTargetDescription ctd = { .format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
-                                              .blend_state = sb };
+        SDL_GPUColorTargetDescription ctd = { .format = ctf, .blend_state = sb };
         /* the shadow needs its own fragment stage: the car's fragment shader
          * takes a sampler, and a pipeline with a sampler must have one bound at
          * every draw or SDL aborts ("Missing fragment sampler binding!"). */
@@ -1521,7 +1530,7 @@ int main(int argc, char **argv) {
             .code_size = sblen[3], .code = sblob[3], .entrypoint = "main",
             .format = SDL_GPU_SHADERFORMAT_SPIRV, .stage = SDL_GPU_SHADERSTAGE_FRAGMENT });
         if (!bv || !bf) { fprintf(stderr, "[ERR] backdrop shader: %s\n", SDL_GetError()); return 1; }
-        SDL_GPUColorTargetDescription ctd = { .format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM, .blend_state = {0} };
+        SDL_GPUColorTargetDescription ctd = { .format = ctf, .blend_state = {0} };
         SDL_GPUGraphicsPipelineCreateInfo pci = {0};
         pci.vertex_shader = bv;
         pci.fragment_shader = bf;
@@ -1668,9 +1677,9 @@ int main(int argc, char **argv) {
                 if (color_ms) {
                     SDL_ReleaseGPUTexture(dev, color_ms);
                     color_ms = SDL_CreateGPUTexture(dev, &(SDL_GPUTextureCreateInfo){
-                        .type = SDL_GPU_TEXTURETYPE_2D, .format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+                        .type = SDL_GPU_TEXTURETYPE_2D, .format = ctf,
                         .width = W, .height = H, .layer_count_or_depth = 1, .num_levels = 1,
-                        .sample_count = (SDL_GPUSampleCount)samples,
+                        .sample_count = scount,
                         .usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET });
                 }
             }
