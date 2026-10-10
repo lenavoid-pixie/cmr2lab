@@ -33,7 +33,7 @@ from something the game shipped.
 ## Try it
 
 ```
-git clone https://github.com/lenavoid-pixie/cmr2lab
+git clone https://github.com/LENAWare-Works/cmr2lab
 cd cmr2lab
 ./cmr2lab status /path/to/your/game
 ./cmr2lab unpack /path/to/your/game/Game/Cars/205a1.bfl /tmp/205
