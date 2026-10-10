@@ -24,28 +24,90 @@ records is about **0.0003**. Observed: 119,715.
 
 **3. Count parity.**
 Indexed yields exactly **888 triangles = the header's `c20`**, the recorded face
-count. The strip reading invents 1,176 (+32%) and would leave the whole 67 KB
-triangle block as dead weight that the loader nonetheless walks.
-`sum(part.F) == c20` in **254 / 259** files.
+count. The strip reading yields **1,176** — that is **288 triangles the file does
+not contain** (+32.4%) — and it would leave the whole 67 KB triangle block as
+dead weight that the loader nonetheless walks.
+
+`sum(part.F) == c20` in the **254 files whose header carries a `c20` at all**,
+with **0 mismatches**; the other 5 of 259 files have no comparable count (`tools/
+toposcan.c` prints `254 ok / 0 off`). The earlier phrasing here — "254/259" —
+read as if 5 files disagreed with the reader. They do not; they have nothing to
+compare.
+
+Tree-wide the two readings are further apart than on this one car: indexed
+**119,753** triangles against strip's `sum(V-2)` = **175,173** (+46.3%). The
+per-car ratio varies because the strip reading costs `-2` per *part*, so cars cut
+into many small parts drift furthest from the file's own count.
 
 **4. Render, both ways.**
-Four angles each. Indexed is **watertight** — 0 interior holes, 1 connected
-component. Strip leaves **120–337 holes** and splits the model into up to 4
-components. Bridging distance 0.00% vs 0.68%.
+Four angles each, with `tools/compare_bmp.py`. Measured with **no `.bfl` beside
+the car**, so every part draws flat white. That is the condition these numbers
+are valid in, and it is not the viewer's default:
+
+```
+read      yaw   cover%   holes  comps
+indexed    38   11.93%       0      1
+indexed   128   11.75%       0      1
+indexed   218   12.98%       0      1
+indexed   308    9.37%       0      2
+strip      38   11.94%     120      4
+strip     128   11.83%     320      3
+strip     218   13.15%     337      1
+strip     308    9.37%     245      2
+```
+
+Indexed closes every enclosed background pixel and comes out as one piece
+(two at the rear angle); strip leaves 120–337 enclosed background pixels and up
+to 4 pieces.
+
+**Caveat, because it bit once already.** Put the `.bfl` back and the same
+comparison gives **1,455–2,797** holes for indexed and **2,935–13,849** for
+strip. The ordering survives; the numbers do not. Transparent parts
+(`07SemiTrans`) let the clear colour through, and an enclosed transparent window
+reads as a hole. **A hole count is only comparable between builds that render
+transparency the same way** — which is why the flat-white condition is stated
+here instead of assumed.
 
 ### Why a render could never have settled this — stated plainly
 
-Both readings produce a **recognisable car**. The difference is roughly **0.3%
-of covered pixels**. An early strip render looked correct and was treated as
-confirmation; it was not evidence. The thing that settled it was finding the
-decompiled loader. **A plausible-looking silhouette is not proof.**
+Both readings produce a **recognisable car**, and the honest measurement of how
+close they are is *worse* than this note first claimed. Measured on the current
+viewer, flat-white condition, four angles:
+
+| | of the model's pixels |
+|---|---|
+| outline differs | **1.1 – 2.4%** |
+| shading differs | **37 – 50%** |
+| enclosed missing patches | **0.1 – 0.3%** |
+
+So the two readings agree on the *outline* and disagree almost everywhere else,
+because the strip reading draws different triangles across the same surface. An
+early strip render looked correct and was treated as confirmation; it was not
+evidence. Finding the decompiled loader is what settled it. **A
+plausible-looking silhouette is not proof, and neither is its absence.**
 
 Two dead ends, recorded so nobody repeats them:
 
 - **Edge-manifoldness does not discriminate.** A triangle strip is manifold *by
   construction* and scores **better** than the real mesh. Useless as a test.
-- **Bridging distance is too small to be decisive on its own** (0.68% vs 0.00%).
-  It corroborates; it does not conclude.
+- **The bridging metric does not discriminate either — and its published number
+  is withdrawn.** This section used to claim 0.00% vs 0.68%. Re-run on the
+  current viewer it prints **0.00% for both readings**: strip's longest-edge
+  ratio (median, normalised by part bbox diagonal) *rises*, 0.1764 → 0.2035, and
+  that is enough to pull every triangle back under the 5x-tail threshold. The
+  0.68% is not reproducible from the code in this repo, so it is struck out
+  rather than left standing as corroboration it cannot give.
+
+### Status of these numbers — re-measured 2026-10-10
+
+Everything still quoted above was re-run immediately before this was committed:
+`toposcan` across all 259 cars (99.968%, 119,715 hits, `254 ok / 0 off`,
+119,753 vs 175,173), `c3dprobe` on `205a1N` (888 indexed vs 1,176 strip), the
+four-angle render pair, and the viewer's own output. Two things did **not**
+reproduce and were corrected rather than left standing: the strip count was
+being stated as *"invents 1,176"* when 1,176 is what strip **yields**, and the
+0.68% bridging figure is withdrawn. The citation at the top of this section is
+not a measurement — it is the game's own loader, and it is what decides this.
 
 ### The vertex base — an earlier version was 12 bytes late
 
