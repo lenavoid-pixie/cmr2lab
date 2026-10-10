@@ -25,6 +25,97 @@ Paths, so they line up on both ends:
 |---|---|
 | the install | `~/lena/.lena_cmr2/game` (**638 MB** retail PC install; 259 `.c3d`, 220 car containers. It said 2.26 GB here — that was the disc-image copies in `gamedata/`, corrected §0b/§6) |
 
+## 0c. S2 MEASURED — THE STATE TRACKER IS NOT THE MOUNTAIN. added 2026-10-10 19:0x EEST by the `seq-s2-first` worker; appended, nothing below it touched except the two §6 lines marked CORRECTION
+
+**The phone's call was "S2 before P2". Agreed — and the measurement changes what
+S2 *is*, which is the reason to say so before spending a week on it.**
+
+I put a call census inside the port's own device (`rhi/deck_dd7.cpp`,
+`DECK_DD7_CENSUS=1`) and ran **the game's own binary** (`work/S2/build/cmr2`,
+i386, link exit 0). Two runs, 20 s and 28 s:
+
+| | 20 s run | 28 s run |
+|---|---|---|
+| presented frames | 1,126 | 1,606 |
+| draws / triangles | 77,287 / 159,414 | 205,714 / 426,806 |
+| **distinct pipelines** | **1** (built=1, hit=1125) | **1** (built=1, hit=1606) |
+| draws refused by the backend | **0** | **0** |
+| draws through the mesh FVF `0x2d2` | **0** | **0** |
+| mesh vertex buffers created | 206 (469,890 vertices) | same |
+| **state calls answered `D3D_OK` and dropped** | **29,512** of 99,704 | — |
+
+So: **the state tracker + pipeline cache that PORT-PLAN calls "the mountain"
+already exists and works** — 1.33 M draws collapse to one pipeline because the
+key is a 9-field struct snapshotted at draw time, which is the design working, not
+a cache that never fired. What the game can reach today draws **only** FVF
+`0x1c4` (screen-space TL); the 3D vertex buffers are built at load and **never
+drawn through once**. The port plan's sentence "what draws today is the
+frontend's path" is now a number.
+
+**What is actually missing is state FIDELITY, and it is already leaking.**
+`work/S2/d3d_census.py` (published as `tools/d3d_census.py`) compares every state
+the game names against `map_rs`/`map_tss` in the device: **10 of 18 render states
+and 10 of 19 texture-stage states are dropped** — `COLORVERTEX`,
+`DIFFUSEMATERIALSOURCE` (+3 material sources), fog colour/start/end/table/vertex
+mode, `NORMALIZENORMALS`, `LOCALVIEWER`, `TEXTUREFACTOR`; `TEXCOORDINDEX`,
+`TEXTURETRANSFORMFLAGS`, `MIPFILTER`, `MAXMIPLEVEL`, the five `BUMPENV*`. That is
+the lit-mesh path's whole vocabulary. For 2D it mostly costs nothing; for a car on
+a stage it is the difference between shaded and flat.
+
+### The two census numbers settle like this — and the README was RIGHT
+
+**278 and 298 are the same census at two scopes, not two answers.**
+
+| scope | sites | methods | draws | state |
+|---|---|---|---|---|
+| `pD3D->` (the device) | **278** | 20 | 22 | **256** |
+| `pD3D->` + `pDD->` (the D3D7 object) | **298** | 26 | 22 | **276** |
+
+* The README's **278 / 20 / 256 / 22 is correct as published. Do not change it** —
+  just keep the scope words beside it (`pD3D->`, the device the game draws
+  through).
+* **CORRECTION to §6 below:** "277 of 298" is `298 − 21`; there are **22** draws
+  in that scope (it misses the one `pD3D->DrawIndexedPrimitive`). The line is
+  **276 of 298**.
+* **518 is not reproducible and I am not replacing it with a fourth definition.**
+  Counted now: every `x->Method(` in the tree = **533**; a D3D7-method-whitelisted
+  count = **400**. Quote 518 with its scope or drop it (§6 of `docs/PORT-PLAN.md`
+  now says so).
+* And the count is not comment text: blanking `//` and `/* */` first gives the
+  same 278/20/298. A regex that stops at the first identifier gives 275 — it loses
+  every call written `m_pTextureManager->pD3D->Method(...)`. That is how a census
+  quietly stops meaning anything.
+
+### The verdict on the "smaller first milestone"
+
+Right instinct, wrong lever. **There is no pipeline-per-combination work to
+hardcode** — one pipeline served 1.33 M draws, and the cache already generalises
+what a hardcoded table would special-case. The blocker is not pipelines: it is
+(a) the dropped states above and (b) **reaching a race at all**. I drove the game
+from the attract loop with the pad (12 presses) and never saw a mesh draw, so a
+"one real 3D frame" milestone has to start from *getting the game to a track*,
+which is a game-state problem, not an RHI one. S2 therefore splits: **S2a = state
+fidelity** (measurable today: `ignoredStates` → 0, printed per run) and **S2b =
+reach a race** (where the picture actually is).
+
+### Sequencing, and the P2 question
+
+**Agreed: S2 before P2**, for the reason the phone gave — S2 is where the unknowns
+were. They are now smaller than modelled, and P2 is now the bigger pile. But
+**I did not start P2 in parallel, and I would not**: not for file conflicts (P2
+touches 33 game files, S2 touches `rhi/`) but for the **object set**. P2 widens
+headers, which invalidates every prebuilt object exactly as P3 did; the one
+artifact that makes all of this measurable — a game binary that links (66/66,
+link exit 0) — would go mixed-header under it. If P2 starts while an S2 evidence
+run is live, it must run its own sweep directory and must not relink the game
+binary until it lands. Then both lanes stay real.
+
+**Not done, on purpose:** no dropped state was implemented this round (they get
+implemented against the census, not against a screenshot), and no attempt to
+finish the menu navigation. Full evidence, raw logs and the two supporting fixes
+(`a7_vk32.h` was missing `extern "C"`; the device's own `draws` counter only
+counted one of the four draw entry points): `work/S2/README.md`.
+
 ## 0a. THE MIRRORED FLANK — CLOSED. added 2026-10-10 18:27 EEST — cited by *subject*, not by hash, because this repo is rebased onto `origin/main` under it: `git log --oneline --grep='flank mirroring'` finds it (it said 18:35 EEST here at first, later than the commit that carried it; corrected in the re-verification pass)
 
 **Question, from the phone, and nobody else's queue:** in the 4-car frame and the
@@ -324,8 +415,13 @@ Read §0 as mine, dated, and everything below as the previous worker's.
   are the outside ones.
 - **Mine, labelled, and in the note:** the ambient value, both lights, the planar
   ground shadow, the backdrop, MSAA, the camera and the framing.
-- **Biggest gap:** the D3D7 state tracker (277 of 298 call sites are state calls) still
-  does not exist, so the port still cannot draw a car. This frame is the target image
+- **Biggest gap:** CORRECTION 2026-10-10 19:0x (§0c): the tracker **exists** and the
+  count is **276 of 298** (298 − 22 draws). Measured, the backend served 1,334,903
+  draws through **one** pipeline with 0 refusals. The port still cannot draw a car
+  for a different reason: **the game never issues a mesh draw** — 206 mesh vertex
+  buffers, 469,890 vertices, zero draws through them — and the states the lit mesh
+  path sets (COLORVERTEX, DIFFUSEMATERIALSOURCE, fog, NORMALIZENORMALS…) are among
+  the 10 render states the device answers `D3D_OK` and drops. This frame is the target image
   for M3 and the run-split/alpha/texture list above is the spec it has to reproduce.
 - **The texture fix has a number, not an opinion.** `NAMETEX=1` renders the old
   name-matched path, so the two were diffed: car mean chroma **2.2 → 13.6**, mean
@@ -679,9 +775,13 @@ once by a test harness of mine.
   game's joystick device and the engine has the code to read them as magnitudes, but
   **no axis carries them into the car** — and throttle/brake have no feeding axis at
   all right now.
-- **The port has no working full backend.** 277 of the 298 D3D7 call sites are
-  render-state calls and the state tracker that would service them does not exist.
-  What draws today is the frontend's path, not the game's 3D pipeline.
+- **The port has no working full backend.** CORRECTION 2026-10-10 19:0x (§0c): the
+  call count is **276 of 298 state calls** (not 277 — there are 22 draw sites, not
+  21), and **the state tracker that would service them DOES exist**
+  (`rhi/deck_dd7.cpp` + the pipeline cache in `rhi/a7_vk32.c`): a 28 s run of the
+  game's own binary made 1,334,903 draws through one pipeline, 0 refused.
+  What draws today is the frontend's path, not the game's 3D pipeline — that half
+  is now measured rather than asserted: **0 of 205,714 draws carried the mesh FVF.**
 - **Every port number here is compile-level.** ASAN does not build. §4.
 - **`2.26 GB` in the README does not match this install.** I measured the retail
   install myself: 908 files, **0.59 GB** by summed file size, 610 MB by `du`;

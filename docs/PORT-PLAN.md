@@ -326,12 +326,24 @@ The trace becomes *"which decompiled function fires which Win32 call, in order."
 |---|---|---|
 | distinct Win32 symbols used | **85** | tree-wide, full Win32 name set |
 | Win32 call sites | **221** | comment/string-blanked scan |
-| D3D7/COM method sites | **278 / 298 / 518** | `pD3D->` only / `pD3D->`+`pDD->` / all typed receivers |
+| D3D7/COM method sites | **278 / 298** | `pD3D->` only / `pD3D->`+`pDD->` |
+| — of those, draws / state | **22 / 256** and **22 / 276** | both scopes, measured 2026-10-10 |
 | Win32 symbols the census missed but that fire on the boot path | **15** | relay vs grep |
 | decompiled functions that fire before a first frame | **23** | one 50 s run |
 
-The 278/298/518 row is not a correction of anything above — they are three
-different scopes and each is defensible. Quoting one without its scope is the
+**UPDATE 2026-10-10 (worker `seq-s2-first`, reproducible: `tools/d3d_census.py`,
+one command, no arguments).** 278 and 298 are confirmed exactly, and they are the
+same census at two scopes: `pD3D->` = 278 sites / 20 methods / 22 draws / 256
+state; adding `pDD->` = 298 / 26 / 22 / 276. **518 is NOT reproducible** and should
+not be re-quoted without its definition: counting every `x->Method(` in the tree
+gives **533**, and a D3D7-method-whitelisted count gives **400**. The count is not
+comment text -- blanking `//` and `/* */` gives the same 278/298 -- but a regex
+that stops at the first identifier gives **275**, because it loses every call
+written `m_pTextureManager->pD3D->Method(...)`. That is the failure mode this
+table exists to prevent.
+
+The 278/298 row is not a correction of anything above — they are two
+different scopes and both are defensible. Quoting one without its scope is the
 error, which is the same one already recorded in §7.
 
 ### The runtime finding that matters most

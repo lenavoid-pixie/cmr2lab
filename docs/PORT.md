@@ -90,6 +90,28 @@ combination, cache the pipeline per combination. The interface is sketched in
 `port/rhi/cmr2_rhi.h` — 105 lines, interface only, no backend — which lives in
 the port working tree and is **not shipped in this repo**.
 
+**UPDATE 2026-10-10 (measured, not planned — `tools/d3d_census.py`, and
+`work/S2/README.md`).** The last sentence above is out of date in two ways, and
+the numbers above it are confirmed exactly (278 / 20 / 256 state / 22 draws).
+
+1. **"Interface only, no backend" is no longer true.** `rhi/deck_dd7.cpp` and the
+   Vulkan backend behind it exist and answer all of it. Instrumented and run
+   against the game's own binary: **1,334,903 draws went through ONE pipeline,
+   with 0 draws refused.** The "state tracker and pipeline cache" this section
+   calls for is built, and it is doing the collapsing it was designed to do.
+2. **It is not SDL3_GPU.** The port uses **32-bit X11 + Vulkan directly** (see
+   `docs/PLATFORM-DECISION.md`); SDL3 was removed, not rebuilt. Any sentence in
+   this repo that still says SDL3_GPU is describing the road not taken.
+
+**What is actually missing is state fidelity, and it is measured:** of the 18
+render states and 19 texture-stage states the game names, **10 and 10 are answered
+`D3D_OK` and silently dropped** — including `COLORVERTEX`,
+`DIFFUSEMATERIALSOURCE`, the fog states, `NORMALIZENORMALS`, `LOCALVIEWER`,
+`TEXCOORDINDEX`, `TEXTURETRANSFORMFLAGS`, `MIPFILTER`. A 20 s run of the game
+dropped **29,512** state calls. And every draw the game makes today is the 2D
+path: **0 of 205,714 draws carried the mesh FVF `0x2d2`**, though 206 mesh vertex
+buffers (469,890 vertices) are created at load.
+
 This is the real mountain. It is also the part that makes the game *a game*
 rather than a renderer.
 
