@@ -5,34 +5,40 @@ the timestamp below, it is not in this file. Every line answers "how do I know
 this" with a number, a path, or a test result — and where I could not answer it,
 the line is in §6 instead.
 
-**Last rewritten: 2026-10-10 14:28 EEST.** This file is one commit — the rewrite
+**Last rewritten: 2026-10-10 14:47 EEST.** This file is one commit — the rewrite
 that carried it is `git log -1 -- progress.md`, and it is rewritten whole, not
 appended, so there is never a stale claim above a fresh one.
+
+**On provenance, because this rewrite is 19 minutes after the last one.** §1, §2.8,
+§3A and §5 are measured at 14:47. Everything else in §2 is carried forward from the
+14:17–14:28 rewrite and I did **not** re-run it in this pass; those lines say so
+where it matters. Nothing here has been re-derived from memory.
 
 Paths, so they line up on both ends:
 
 | short name | real path on the Deck |
 |---|---|
-| the install | `…/Steam/steamapps/compatdata/3646996028/pfx/drive_c/Program Files (x86)/Codemasters/Colin McRae Rally 2` |
-| the port tree | `~/.lena_cmr2/port` (game + platform shims + `deckbuild/out/cmr2`) |
-| this repo | `~/lena/work/cmr2lab-publish` |
-| daemon state | `~/lena/state`, `~/lena/logs/daemon.log` |
-
----
-
-## 1. RIGHT NOW
+| the ins## 1. RIGHT NOW
 
 - **Daemon** `lena_daemon.py` pid **250660**, **2 workers**, model `deepseek-v4-flash`,
-  uptime 4,760 s (~79 min), 400 steps per round.
-- **Worker 1 = PROGRESS-REPORT** (this page), claimed 14:16:50, **step 55**.
-- **Worker 2 = GAME2-r6-r2** ("make game work with Control of deck steam"),
-  claimed 14:12:39, **step 63**, and this second it is running the port **under gdb**:
-  `~/.lena_cmr2/port/deckbuild/out/cmr2` under `work/GAME2-r6/pad5.gdb`
-  (pids 287846 / 287849 / 287866), reading the game's own controller records out of
-  the live process — device `slot[2]`, the axis-binding table at `+0x470`,
-  `m_controllerInfo[2]` at `0xfd3cec`. That is the last open question in its own
-  checkpoint ("STILL TO MEASURE"), so a real runtime answer should exist shortly.
-- **Queue:** 32 tasks — 17 `done`, 10 `partial`, **2 `running`** (those two),
+  uptime **5,400 s (~90 min)**, 400 steps per round. `state/status.json` was
+  refreshed 14:37:39 — **6 s old** at the moment the relay published, so the loop is
+  alive, not merely `active` under systemd.
+- **Worker 1 = GAME2-res** ("Can't boot up to the native resolution on a steam
+  deck"), claimed 14:29:08, **step 71** at 14:37:29. Working in `work/GAME2/r7`: it
+  wrote a `mkconfig.py` to put a real `Configuration/GameInfo.rcf` where the game
+  looks for it, rebuilt `outres/cmr2`, and is capturing frames
+  (`R7_SNAPFRAMES=1200,1500:/tmp/final.ppm`).
+- **Worker 2 = RELAY-VISIBILITY** (this page), claimed 14:34:47.
+- **Queue:** 33 tasks — 18 `done`, 11 `partial`, **2 `running`**, 1 `pending`
+  (`GAME2-r6-r3`, the auto-spawned continuation of the pad job), 1 `blocked` (§4).
+  `state/task_queue.json`.
+- **Relay:** last successful publish **14:37:25**, `first_fail: null`
+  (`state/relay_health.json`). The outbox is **1,537 bytes** and now carries the
+  work itself, not just the depth — §2.8.
+- Load average **2.08** on 8 threads. Nothing is starved.
+
+s — 17 `done`, 10 `partial`, **2 `running`** (those two),
   2 `pending`, 1 `blocked` (stale — §4). `state/task_queue.json`.
 - **Relay:** systemd timer, 3-minute interval; last successful publish
   **14:25:19** (`state/relay_health.json`, `first_fail: null`).
@@ -125,13 +131,54 @@ re-run the trace.*
 steer / throttle / brake as 0..0x3f scaled by |axis|. Throttle and brake
 **default to the same axis** (axis 1) — the combined-pedal convention.
 *Provenance: read out of the decomp and cross-checked against §2.5; the live-process
-confirmation is the run in flight in §1.*
+confirmation is the run in flig**8. The relay works end to end, and the outbox now carries the WORK, not the depth.**
+I re-ran both suites after today's change, on this Deck, just now:
+`state/relay_tests.sh` → **20 passed, 0 failed** (injection, locking, corrupt queue);
+`state/relay_brief_tests.sh` → **22 passed, 0 failed** in the briefing section plus
+**4 passed** in a new corrupt-queue section (all sandboxed to `/tmp` — they never
+touch the live queue; a harness of mine leaked into the real queue once at 14:10 and
+that is why the sandbox is asserted).
 
-**7. SDL3 gets a real GPU on this Deck.**
-Device created with the `vulkan` driver on the real Radeon (RADV VANGOGH); a
-triangle rendered offscreen and read back. I checked the artifact myself:
-`state/probe_tri.bmp` is 128×128, 24 bpp, with **4,050 non-black pixels of 16,384** —
-not a blank buffer. (It is 4,050 in both the Python and the C probe.)
+Live file, published 14:37:25, **1,537 bytes**:
+
+| key | what it is now |
+|---|---|
+| `current` | id + first line (≤90 chars) + `running_for` + worker id, ≤3 entri**A. Deck controls (GAME2-r6 pad lane).** Round 2 (`GAME2-r6-r2`) ended
+**partial** at 14:34:47 (67 steps, 1,328 s) and spawned **`GAME2-r6-r3`**, which is
+`pending` as I write. Its live checkpoint is `work/GAME2-r6/CHECKPOINT.md`.
+- **Round 2's headline result, in its own words:** it measured that the port already
+  drives the *real* pad — `/dev/input/event10 'Microsoft X-Box 360 pad 0'`, live
+  moving axis values — and read the game's own `DeviceInfo` out of `/proc/pid/mem`
+  under gdb holding the same values (`lX=2097, lY=-851, lRx=-1966, lRy=4587`). It
+  then found and fixed a **port** bug that had made analog impossible regardless of
+  mapping: `deck_dinput.cpp`'s `prop_id()` returned the object's address, so every
+  `RANGE` call returned `DIERR_UNSUPPORTED` and `controlCount` stayed 0. After the
+  fix: all 8 axes answer `DI_OK`, and the game itself calls `SetProperty(RANGE)`
+  ±0x10000 on each — inside an `if (controlCount > 0)`.
+- **What round 2 did NOT show:** it did not re-run the masked-pixel move proof on the
+  new binary ("show it MOVE with the actual pad" is *not* demonstrated by me on this
+  build), and it did not confirm the post-fix read-back in game memory
+  (`controlCount==8`, axis bindings 0/1/1). `m_controllerInfo` was still all zeros
+  300 polls in, i.e. `RefreshControllerConfigurations` had not run — **that is the
+  key unknown and it is what round 3 starts on.**
+- Pad → frontend, latest measured state: **6 of 22** tested inputs register above the
+  measured bar on the static screen; LEFT/RIGHT also register on other screens (both
+  axes work; which one bites depends on the screen). **4 of 22 are clean negatives
+  (X, Y, L1, R1) and are explained, not pending.**
+- Analog **delivered**: done. Analog **consumed by the car**: **0 of 1** — the
+  engine's throttle/brake axis (axis 1) is fed by nothing, because the port maps
+  L2→axis 2 and R2→axis 5. The fix is port-layer (`axis1 = R2 − L2`), not written yet.
+
+d shape
+told the phone end: `next[].via` reported `hand` for a continuation the daemon
+spawned itself; an empty `errors` said "nothing is wrong" while a job sat `blocked`
+for 17 hours; an unreadable queue published as zero pending; and `active` from
+systemd was the only health signal, which a wedged worker thread also produces.
+Verified on the live wire, not only in the sandbox — the file published at 14:37:25
+carries `via: "auto"` for `GAME2-r6-r3`, `blocked: [t2]`, `queue_readable: true`,
+`daemon_age_s: 6`. Every number in §1 came from reading that file back.
+
+n both the Python and the C probe.)
 
 **8. The relay works end to end.**
 Re-ran both suites today: `state/relay_tests.sh` → **20 passed, 0 failed**;
@@ -156,28 +203,23 @@ I checked at 14:18. The real nodes are there: Steam Deck Controller `event4`
   and are explained, not pending.**
 - Analog **delivered**: done. Analog **consumed by the car**: **0 of 1** — the
   engine's throttle/brake axis (axis 1) is fed by nothing, because the port maps
-  L2→axis 2 and R2→axis 5. The fix is port-layer (`axis1 = R2 − L2`), not written yet.
+  L2→axis## 5. NEXT — the next three things, in order
 
-**B. The native port: 27 of 66 translation units compile** on the mandate target
-(**41 %**), 1,561 errors left. The RHI state tracker — 277 of 298 D3D7 call sites
-are *state*, and SDL3-GPU has no `SetRenderState` — is **not started**. No
-measurable fraction: you cannot count code that does not exist.
-
-**C. Dependency map (DEPMAP)**: static call graph + runtime relay trace + the
-7-tier build order are on disk and documented (`docs/DEPENDENCY-MAP.md`,
-`docs/RUNTIME-RELAY.md`, 5 CSVs), but the queue still says `partial`. That is queue
-hygiene, not work — **no measurable fraction**.
-
-**D. This report:** no fraction.
-
----
-
-## 4. BLOCKED
-
-**The one `blocked` entry in the queue is stale and should be closed.** `t2`
-("can SDL3 render on this Deck's real GPU") is marked blocked; it was killed on
-2026-10-09 because the probe popped modal SDL assert dialogs on Miami's desktop.
-The question was answered afterwards, longhand, with a rendered triangle on disk
+1. **`GAME2-r6-r3`** — first in the queue, auto-spawned, and the pad lane's own next
+   round. Its outstanding item is the one round 2 named: confirm the post-fix read-back
+   in the live game (`controlCount==8`, axis bindings 0/1/1) and find out whether
+   `RefreshControllerConfigurations` ever runs — if it never runs, the axis bindings
+   still do not exist even with the ranges fixed. Then re-run the masked-pixel move
+   proof on the new binary, and write the port-layer combined pedal axis
+   (`axis1 = R2 − L2`) driven by a real analog trigger value. That converts "analog is
+   delivered" into "analog is consumed".
+2. **`GAME2-res`** — native resolution on the Deck panel, 1280×800, filling it with no
+   letterboxing. Already running, worker 1 (§1).
+3. **Then the repo's stale numbers and the source bug** — 27 / 64 (66 / 66 with the
+   narrowing flag) replaces 26/66 and 53/66 in README and `docs/PORT.md`, with the
+   exact command printed beside it, and `typedef long LONG` gets fixed (one line) and
+   re-measured. And close `t2`, which is answered and still sitting in `blocked`.
+isk
 (§2.7). Nothing blocks it. **I did not edit the queue to close it** — status
 changes there are the daemon's to make, and that file has already been corrupted
 once by a test harness of mine.
@@ -267,5 +309,12 @@ once by a test harness of mine.
   that are finished and `blocked` for one that is not. This file is the status
   report; trust it over the queue.
 - **Three commits were sitting on this Deck unpushed** (the dependency-map work).
-  They go up with this file — so if you read the repo before 14:30 today, you did not
-  see them.
+  They went up at 14:30 with the previous rewrite of this file — so if you read the
+  repo before then, you did not see them.
+- **`blocked: [t2]` on the wire is the queue's stale entry, not a real blocker.**
+  The outbox is a faithful copy of a field that is wrong (§4). I did not fix the
+  queue field; the daemon owns that file.
+- **`daemon_age_s` tells you the status file is fresh, not that work is advancing.**
+  A worker stuck inside one long `gdb` run keeps `status.json` ticking. `running_for`
+  growing with `last_done` frozen is the pair to watch.
+
