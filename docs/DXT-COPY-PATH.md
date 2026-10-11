@@ -296,3 +296,22 @@ so 64×64 terrain textures minify with aliasing.
 **Runs `tx1`–`tx8`: 0 GPU ring timeouts (kernel count 12 → 12, unchanged every
 run).** A stage was reached in every one. 66/66 game objects untouched; the
 instrumented port objects are inert with their env vars unset.
+
+## 9. INERTNESS, VERIFIED ON THE BINARY HE RUNS
+
+The three instrumented objects in the tree are the ones the PLAY binary links, so
+"off unless the env var is set" is a claim about what Miami gets, not a hope. Run
+with **every** variable unset (`env -u DECK_FE_TRACE -u DECK_SURFTRACE
+-u A7VK_TEXUSE -u A7VK_TEXDUMP -u A7VK_TEXDUMP_LOG`), log `out/clean.log`:
+
+```
+[SURF]   lines:  0
+[TEXUSE] lines:  0
+[TEX]    lines:  0
+TEXDUMP  lines:  0
+[CENSUS] draws by FVF: 0x1c4 TL=647685 0x2d2 MESH=662217 refused_by_backend=0
+```
+
+Zero lines from every instrument, 662,217 mesh draws — the stage is still reached
+and nothing is printed. **0 GPU ring timeouts; no stray process and no window left
+on his desktop.**
