@@ -293,9 +293,14 @@ so 64×64 terrain textures minify with aliasing.
 | `work/RACE/out-tex/cmr2` | the build these results were measured on |
 | `work/RACE/` | `bfl.py`, `bfl_dds.py`, `dxt.py`, `cmp_model.py`, `find_src.py`, `search_src.py`, `look.py`; `patch_textrace.py`, `patch_dxt_blt.py`, `patch_dxt_exact.py`, `patch_texuse.py`, `patch_texuse2.py`, `patch_texuse3.py`; logs `out/tx1..tx8.*` |
 
-**Runs `tx1`–`tx8`: 0 GPU ring timeouts (kernel count 12 → 12, unchanged every
-run).** A stage was reached in every one. 66/66 game objects untouched; the
-instrumented port objects are inert with their env vars unset.
+**Runs `tx1`–`tx8` + `pdefault` + `clean`: 0 GPU ring timeouts (kernel count
+12 → 12, unchanged every run).** A stage was reached in every one.
+
+**One game source file changed, and it is the only one:** `Graphics.cpp`, which
+carries the `DECK_FE_TRACE`-gated texture-name trace — additive prints, no
+logic, no branch, nothing written. It is **not** 66/66 objects this round; that
+claim belongs to rounds that only touched the RHI. Every other game object is
+rebuilt from unmodified source, and `clean.log` proves the prints are inert.
 
 ## 9. INERTNESS, VERIFIED ON THE BINARY HE RUNS
 
