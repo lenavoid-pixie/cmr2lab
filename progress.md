@@ -25,6 +25,84 @@ Paths, so they line up on both ends:
 |---|---|
 | the install | `~/lena/.lena_cmr2/game` (**638 MB** retail PC install; 259 `.c3d`, 220 car containers. It said 2.26 GB here — that was the disc-image copies in `gamedata/`, corrected §0b/§6) |
 
+## 0g. THE PAINT IS FIXED. added 2026-10-11 04:3x EEST by the `work/RACE` worker; appended, nothing above or below it touched
+
+**One line: every stage texture is DXT5 and the port was copying the *compressed
+blocks* into a 32-bit texture as if they were pixels — `DeckSurface7::Blt`, reached
+from `CGraphics::LoadDDSTexture`, did no format conversion, and a real DirectDraw
+driver does exactly that conversion, so the fix is seven lines of port code and a
+decoder — and with it the Kenya terrain renders in its own colour where it rendered
+chromatic noise.**
+
+Full write-up: `docs/DXT-COPY-PATH.md`. Every number below is from tonight's runs
+`tx1`–`tx8`, **0 GPU ring timeouts, 12 → 12 unchanged in every run**, a stage
+reached in every one.
+
+**The copy path, named and joined end to end** (from the new `DECK_SURFTRACE`
+FourCC report plus `DECK_FE_TRACE` naming the texture):
+
+```
+[TEX] DDS .\Game\Tracks\KENYA\KENlo.DDS 64x64 fcc=DXT5 ... linearSize=4096
+[SURF] CREATE 64x64 caps=0x401808 ... FOURCC=0x35545844 (DXT5) linearSize=4096
+[SURF] BLT dst=0x2ae9010(64x64 fcc=00000000 bpp=0) <- src=0x2cd18f0(fcc=35545844) srcbytes=6465000000000000
+[SURF]  ST_UPLOAD 0x2ae9010 64x64 pitch=256 id=-1 wroteByGame=0
+```
+
+Those two pointer sets — the surface the game writes and the surface the RHI
+uploads, which §0f could not reconcile — are the two ends of **one blit**. And
+`srcbytes=6465…` is `a0=0x64, a1=0x65`, the first DXT5 block, read at blit time:
+nothing had decoded anything. **All 181 stage DDS textures are DXT5** (`181 DXT5`,
+zero of anything else); the frontend and the cars are **TGA**, decoded in software
+by the game, which is exactly why only the stage was wrong.
+
+**The off-disk control.** `KenLot.bfl` is 370 entries, every one `DDS ` magic,
+64×64, **DXT5**, 128-byte header + 4096 block bytes — the arithmetic is
+self-consistent, so the read was never the fault. Decoded, they are terrain:
+`ter_kn4a.dds` mean RGB **(116, 89, 17)**, alpha **255 on 4096/4096 texels**. The
+decoder was checked against **ffmpeg**: **alpha identical on 4096/4096 texels of
+every file tested**, RGB to within 1 LSB, and both 1-LSB decisions were settled by
+measurement (565→888 by bit replication; DXT5 uses the 4-colour interpolation even
+when c0 ≤ c1 — on `kenlo.dds` block 62 ffmpeg's second colour is `(2A+B)/3 = 129`,
+not the midpoint 160). And the dumped upload is reproduced from the file:
+**`kenlo.dds` + the game's own row loop = 100.00 % of 4096 texels.**
+
+**The alpha question had no second answer — it was the same fault in another
+channel.** No blend state was touched and none was needed. Stage textures went from
+mean alpha 75–154 of 255 and 18–85 % zero-alpha texels to **255 and 0.0 %**, and the
+terrain's own texture decodes to alpha 255 everywhere. The remaining wash on the
+frame is not a bug: it is the game's own dust.
+
+**What paints the frame now, named** — a new instrument, coverage per bound texture
+id (`A7VK_TEXUSE=1`), which existed because after the fix the frame is a *picture*
+and colour statistics cannot say what is on it:
+
+| texture | coverage | what it is |
+|---|---|---|
+| `TRACKTEX\PCLOW\TER_KN4A.DDS` | 1,689,012 | **the terrain** |
+| `NEWIMAGE\DustCld\23_5\D_000..007.DDS` | 9,951–17,387 each | 8 dust clouds |
+| `NEWIMAGE\skid\skids_blank.DDS` | 124,301 | skid marks |
+| `KENYA\OBJECTS\PCLOW\BLD_30A.DDS` | 5,451 | a building |
+| `NEWIMAGE\GRASS\GR_001.DDS` | 2,025 | grass |
+
+**And the measurement that says the terrain is now painted with its own texture:**
+the ground band of the race frame has mean colour **(115, 90, 15)**; the texture it
+is drawn with is **(116, 89, 17)**. The same band before the fix was (142, 171, 159)
+— noise. The whole frame went from 268,522 distinct colours in 385,323 pixels to
+22,187 in 589,792.
+
+**What is still wrong, and it is the next order — the road's own textures never
+reach a draw.** Of the 40+ Kenya track textures loaded and uploaded, only
+`TER_KN4A` and `GR_001` are ever bound in a race; every road texture —
+`RD_K520B`, `RDKN_T1`, `RD_GA/GB/GC`, `MR_*` — is `cov=0.0, draws=0`, and **stage 1
+is never bound at all** (`drawsBoth=0` for a whole run). Whether that is the game's
+material selection or a selection query the port answers wrongly is not answered.
+
+**Miami's binary has it:** `work/PLAY/out-plain/cmr2` is now
+`e43d7a1e4279fe2c05647c7c053d4fd3`; the old `b46d80fee5489834b87f843fd15484e0` is
+kept beside it as `cmr2.bak-pre-dxtblt-20261011`, one `mv` away from reverting.
+
+---
+
 ## 0f. WHAT A RACE IS ACTUALLY ASKED TO DRAW — and what it drops. added 2026-10-11 02:2x EEST by the `work/RACE` worker; appended, nothing above or below it touched
 
 **§0e said: a stage runs, the picture is not a road.** This block answers the
