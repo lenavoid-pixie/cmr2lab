@@ -97,6 +97,8 @@ reach a draw.** Of the 40+ Kenya track textures loaded and uploaded, only
 is never bound at all** (`drawsBoth=0` for a whole run). Whether that is the game's
 material selection or a selection query the port answers wrongly is not answered.
 
+**A correction to the block below, because a document people trust must not carry a stale line without saying so.** §0f ends "still `b46d80fee5489834b87f843fd15484e0`, 66/66 game objects" — true at 02:14. It is now `e43d7a1e…`, and it is **not** 66/66 this round: `Graphics.cpp` is the one game source file changed and it carries a `DECK_FE_TRACE`-gated texture-name trace (additive prints, no logic, nothing written). `out/clean.log` measures them inert — 0 lines from every instrument with the env unset, stage still reached.
+
 **Miami's binary has it:** `work/PLAY/out-plain/cmr2` is now
 `e43d7a1e4279fe2c05647c7c053d4fd3`; the old `b46d80fee5489834b87f843fd15484e0` is
 kept beside it as `cmr2.bak-pre-dxtblt-20261011`, one `mv` away from reverting.
